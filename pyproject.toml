@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-tg-notify"
+dynamic = ["version"]
+description = "把 Claude Code 会话事件推到 Telegram，并可在 Telegram 上批准或拒绝工具调用"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "sakuzeng"}]
+requires-python = ">=3.8"
+dependencies = []
+keywords = ["claude-code", "telegram", "notifications", "hooks"]
+classifiers = [
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Communications :: Chat",
+]
+
+[project.urls]
+Homepage = "https://github.com/sakuzeng/claude-tg-notify"
+
+[project.scripts]
+claude-tg-notify = "claude_tg_notify.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["claude_tg_notify*"]
+
+# 版本号只在 claude_tg_notify/__init__.py 一处维护。
+# 那个文件不导入任何子模块，所以构建时读它永远不会失败。
+[tool.setuptools.dynamic]
+version = {attr = "claude_tg_notify.VERSION"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

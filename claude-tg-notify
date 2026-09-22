@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""仓库根目录的命令行入口，git clone 之后无需安装即可直接运行。
+
+只做一件事：把自己所在目录放进 sys.path，让 claude_tg_notify 包可被导入。
+hook 就是靠这个绝对路径被调用的 —— hook 跑在裸子 shell 里，PATH 与 venv 都不可靠。
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from claude_tg_notify.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())

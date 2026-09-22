@@ -1,0 +1,26 @@
+{
+  "bot_token": "123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "chat_id": "123456789",
+  "proxy": "",
+  "min_turn_seconds": 30,
+  "min_interval_seconds": 30,
+  "max_text_chars": 700,
+  "skip_if_mac_active_seconds": 0,
+  "allowed_user_ids": [],
+  "events": {
+    "stop": true,
+    "permission_prompt": true,
+    "elicitation_dialog": true,
+    "agent_needs_input": true,
+    "idle_prompt": false,
+    "permission_denied": false
+  },
+  "silent": {
+    "stop": false
+  },
+  "approve": {
+    "enabled": true,
+    "wait_seconds": 90,
+    "skip_if_mac_active_seconds": 60
+  }
+}

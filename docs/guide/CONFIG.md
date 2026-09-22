@@ -9,7 +9,7 @@
 | `bot_token` | `""` | @BotFather 给的 token，`setup` 写入 |
 | `chat_id` | `""` | 收消息的聊天；`setup` 从你发给 bot 的第一条消息自动取 |
 | `proxy` | `""` | HTTP 代理，如 `http://127.0.0.1:7890`；留空直连。Clash TUN 模式不需要 |
-| `min_turn_seconds` | `30` | 一轮少于这个秒数不推"任务完成" |
+| `min_turn_seconds` | `60` | 一轮少于这个秒数不推"任务完成"。调小会让日常问答开始刷屏 |
 | `min_interval_seconds` | `30` | 同一会话、同一类通知的最短间隔 |
 | `max_text_chars` | `700` | 正文截断长度（Telegram 上限 4096） |
 | `skip_if_mac_active_seconds` | `0` | 大于 0：Mac 在这么多秒内有键鼠输入就不推**普通通知**。0 = 总是推 |

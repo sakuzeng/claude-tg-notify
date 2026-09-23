@@ -9,12 +9,21 @@ import json
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import config
 
 API_ROOT = "https://api.telegram.org"
+
+#: 盲文空白。Telegram 会裁掉消息首尾的普通空白，但不认它是空白，所以能撑出真正的空行。
+BLANK_LINE = "⠀"
+
+#: 会改动磁盘的工具，它们的 file_path 才值得放进"做了什么"那一行。
+MUTATING_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+ACTIVITY_MAX_TOOLS = 4
+ACTIVITY_MAX_FILES = 3
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +91,97 @@ def session_title(transcript_path: Optional[str]) -> Optional[str]:
         return None
 
 
+def _parse_ts(value: Any) -> Optional[float]:
+    """transcript 里的 ISO8601（UTC，末尾 Z）转 epoch 秒；解析不了返回 None。"""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip().replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def turn_activity(transcript_path: Optional[str], since: float) -> str:
+    """本轮用过哪些工具、动过哪些文件，压成一行。
+
+    纯粹读 transcript 文件里已有的 tool_use 记录并计数，**不经过模型，不产生 token**。
+    拿不到或这一轮没调过工具时返回空串，调用方据此决定是否加这一行。
+    """
+    if not transcript_path:
+        return ""
+    try:
+        path = Path(transcript_path)
+        if not path.exists() or path.stat().st_size > 200_000_000:
+            return ""
+    except Exception:
+        return ""
+
+    counts: Dict[str, int] = {}
+    files: List[str] = []
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                # 先做廉价的子串判断，绝大多数行不用解析 JSON。
+                if '"tool_use"' not in line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    continue
+                if rec.get("type") != "assistant":
+                    continue
+                ts = _parse_ts(rec.get("timestamp"))
+                if ts is None or ts < since:
+                    continue
+                message = rec.get("message")
+                items = message.get("content") if isinstance(message, dict) else None
+                for item in items or []:
+                    if not isinstance(item, dict) or item.get("type") != "tool_use":
+                        continue
+                    name = str(item.get("name") or "?")
+                    counts[name] = counts.get(name, 0) + 1
+                    if name in MUTATING_TOOLS:
+                        inp = item.get("input") if isinstance(item.get("input"), dict) else {}
+                        base = Path(str(inp.get("file_path") or inp.get("notebook_path") or "")).name
+                        if base and base not in files:
+                            files.append(base)
+    except Exception as exc:
+        config.log("activity scan failed: %s" % exc)
+        return ""
+
+    if not counts:
+        return ""
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    shown = ["%s×%d" % (n, c) if c > 1 else n for n, c in ranked[:ACTIVITY_MAX_TOOLS]]
+    if len(ranked) > ACTIVITY_MAX_TOOLS:
+        shown.append("+%d" % (len(ranked) - ACTIVITY_MAX_TOOLS))
+    line = "🛠 " + " ".join(shown)
+    if files:
+        names = files[:ACTIVITY_MAX_FILES]
+        if len(files) > ACTIVITY_MAX_FILES:
+            names = names + ["+%d" % (len(files) - ACTIVITY_MAX_FILES)]
+        line += " · " + " ".join(names)
+    return html.escape(line)
+
+
+def decorate(cfg: Dict[str, Any], text: str) -> str:
+    """每条消息共同的外壳：顶部分隔线 + 尾部空行。
+
+    浅色主题下相邻消息挨得太紧，而气泡间距归客户端主题管、bot 改不了；
+    能做的只有在消息内部制造边界。两个都可以在配置里关掉。
+    """
+    sep = str(cfg.get("separator") or "").strip()
+    if sep:
+        text = "%s\n%s" % (html.escape(sep), text)
+    try:
+        gap = max(0, min(int(cfg.get("gap_lines") or 0), 5))
+    except (TypeError, ValueError):
+        gap = 0
+    if gap:
+        text += "\n" + "\n".join([BLANK_LINE] * gap)
+    return text
+
+
 def describe_session(data: Dict[str, Any], state: Dict[str, Any]) -> str:
     """每条消息开头的两行：会话标题与项目名。"""
     title = session_title(data.get("transcript_path")) or state.get("first_prompt") or ""
@@ -124,7 +224,7 @@ def send_message(cfg: Dict[str, Any], text: str, kind: str = "",
     """发一条消息。返回 message_id（拿不到则 0），失败返回 None。"""
     payload: Dict[str, Any] = {
         "chat_id": cfg["chat_id"],
-        "text": text,
+        "text": decorate(cfg, text),
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
         "disable_notification": bool((cfg.get("silent") or {}).get(kind, False)),
@@ -148,7 +248,7 @@ def edit_message(cfg: Dict[str, Any], message_id: Optional[int], text: str) -> N
     if not message_id:
         return
     payload: Dict[str, Any] = {
-        "chat_id": cfg["chat_id"], "message_id": message_id, "text": text,
+        "chat_id": cfg["chat_id"], "message_id": message_id, "text": decorate(cfg, text),
         "parse_mode": "HTML", "disable_web_page_preview": True,
         "reply_markup": {"inline_keyboard": []},
     }

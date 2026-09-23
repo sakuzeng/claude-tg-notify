@@ -11,7 +11,11 @@
 | `proxy` | `""` | HTTP 代理，如 `http://127.0.0.1:7890`；留空直连。Clash TUN 模式不需要 |
 | `min_turn_seconds` | `60` | 一轮少于这个秒数不推"任务完成"。调小会让日常问答开始刷屏 |
 | `min_interval_seconds` | `30` | 同一会话、同一类通知的最短间隔 |
-| `max_text_chars` | `700` | 正文截断长度（Telegram 上限 4096） |
+| `message_style` | `minimal` | 「任务完成」带不带正文：`minimal` 不带（只剩五行）/ `collapsed` 正文折叠进可展开引用 / `full` 直接摊开。**只管这一类消息**，「需要你批准 / 回答」的正文是问题本身，永远带 |
+| `show_activity` | `true` | 「任务完成」里加一行本轮用过的工具与改过的文件，从 transcript 数出来，不经过模型 |
+| `separator` | `━━━━━━━━━━━━━━` | 每条消息顶部的分隔线，空串 = 不加。浅色主题下相邻消息挨太紧时靠它断开 |
+| `gap_lines` | `1` | 每条消息尾部补几行空白（盲文空白字符，Telegram 不会裁掉），最多 5，0 = 不补 |
+| `max_text_chars` | `700` | 正文截断长度（Telegram 上限 4096）。`message_style=minimal` 时对「任务完成」无效 |
 | `skip_if_mac_active_seconds` | `0` | 大于 0：Mac 在这么多秒内有键鼠输入就不推**普通通知**。0 = 总是推 |
 | `allowed_user_ids` | `[]` | 允许点按钮的 Telegram 用户 id。空 = 私聊对象本人；**群聊必须填**，否则远程批准整体关闭 |
 | `events.stop` | `true` | 任务完成 |

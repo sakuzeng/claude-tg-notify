@@ -79,11 +79,21 @@ def handle_stop(cfg: Dict[str, Any], data: Dict[str, Any]) -> None:
     if state.should_skip_for_presence(cfg):
         return
 
-    body = telegram.truncate(data.get("last_assistant_message") or "", int(cfg.get("max_text_chars") or 700))
     text = "✅ <b>任务完成</b>\n%s\n<b>耗时</b>：%s" % (
         telegram.describe_session(data, st), telegram.fmt_duration(elapsed))
-    if body:
-        text += "\n\n" + html.escape(body)
+    if cfg.get("show_activity", True):
+        activity = telegram.turn_activity(data.get("transcript_path"), float(started))
+        if activity:
+            text += "\n" + activity
+
+    # minimal 只报"哪个做完了"，正文一概不带 —— 这是默认，也是这个工具的本分。
+    style = str(cfg.get("message_style") or "minimal").strip().lower()
+    body = telegram.truncate(data.get("last_assistant_message") or "", int(cfg.get("max_text_chars") or 700))
+    if body and style != "minimal":
+        escaped = html.escape(body)
+        text += ("\n\n<blockquote expandable>%s</blockquote>" % escaped
+                 if style == "collapsed" else "\n\n" + escaped)
+
     if telegram.send_message(cfg, text, "stop") is not None:
         state.mark_sent(st, "stop")
         state.save_state(sid, st)

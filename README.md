@@ -5,7 +5,7 @@
 
 | 消息 | 何时 |
 |---|---|
-| ✅ 任务完成 | 一轮对话结束且跑了超过阈值（默认 60 秒）；带耗时和 Claude 最后一段回复 |
+| ✅ 任务完成 | 一轮对话结束且跑了超过阈值（默认 60 秒）；五行：会话、项目、耗时，外加一行「这轮动了什么」（工具计数 + 改过的文件）|
 | 🔔 需要你批准（带按钮） | Claude 要执行需确认的操作；**允许一次 / 拒绝 / 始终允许** 三个按钮，点一下决定就交回 Claude Code |
 | ❓ 需要你回答 / 输入 | AskUserQuestion 之类的提问、子代理等输入 |
 | ⛔ 自动模式拒绝了操作 | auto 模式下分类器拦截了工具调用（默认关） |
@@ -23,8 +23,11 @@
   垫片只做一件事，把自己所在目录放进 `sys.path`，所以不装也能跑。pip 装过的话退回用解释器绝对路径调模块入口。
 - **为什么"任务完成"有 60 秒阈值。** Stop 在每一轮结束都触发，包括三秒钟的问答；不设阈值就是刷屏。
   这个值的含义是"多久算你可能已经走开了"，所以宁可高不宜低。
-- **为什么它话多也不花钱。** 消息正文来自 hook 载荷和 transcript 文件，读磁盘、直接发走，**全程不经过模型，不产生 token**。
-  唯一的成本是你手机上的一屏，所以以后要压缩的是篇幅不是信息量。
+- **为什么「任务完成」默认不带正文。** 这个工具只要回答一句话：哪个会话做完了。正文搬过来会占掉半屏，
+  真正有用的是那一行 `🛠 Bash×20 Edit×7 · config.py telegram.py`，扫一眼就知道这轮干了什么。
+  想看全文把 `message_style` 改成 `collapsed`（折叠，点开展开）或 `full`。
+- **为什么它话多也不花钱。** 消息里所有内容都来自 hook 载荷和 transcript 文件，读磁盘、直接发走，
+  **全程不经过模型，不产生 token**。所以取舍只在「你手机上的一屏」，不在费用。
 - **为什么 Stop 和 Notification 是 async，PermissionRequest 是同步。** 只有"决定"需要阻塞会话；
   通知类 hook 在后台发，任何错误只写日志，永远返回 0，不会拖慢或打断 Claude Code。
 - **为什么等按钮时要加锁。** Telegram 的 `getUpdates` 只允许一个消费者。多个会话同时在等，谁拿到锁谁拉更新，
@@ -55,7 +58,7 @@ cd claude-tg-notify
 |---|---|
 | `claude-tg-notify` | 命令行与 hook 入口垫片，免安装直跑 |
 | `claude_tg_notify/` | 包：`config` 路径与配置、`state` 会话状态与节流、`telegram` API 与文案、`approval` 远程批准、`handlers` 事件分发、`install` 写 settings.json、`cli` 命令行 |
-| `tests/` | 110 条离线测试：假 Telegram 跑通全部路径，加入口子进程测试与包结构静态约束。`python3 -m unittest discover -s tests` |
+| `tests/` | 129 条离线测试：假 Telegram 跑通全部路径，加入口子进程测试与包结构静态约束。`python3 -m unittest discover -s tests` |
 | `config.example.json` | 配置项全集与默认值，真实配置在 `~/.config/claude-tg-notify/config.json` |
 | `docs/guide/` | 常青规范：架构与数据流、配置项、用到的 Claude Code hook 契约 |
 | `docs/ops/` | 踩坑记录 |
@@ -72,8 +75,9 @@ cd claude-tg-notify
 - 一个 bot 只服务一台机器。`getUpdates` 单消费者的限制决定了两台 Mac 共用一个 bot 会互相吞点击。
 - 手机得能连上 Telegram。这一条在国内意味着 Telegram 内要设代理。
 - 空闲检测只在 macOS 上有（`ioreg`）。Linux 上视为"不在电脑前"，总是发。
-- 消息的气泡颜色、聊天背景、字体归 Telegram 客户端主题管，bot 改不了。浅色主题下觉得几条通知糊在一起，
-  在手机上长按这个 bot 的聊天 →「更改壁纸 / 主题」给它单独设一个，比改消息排版有效得多。
+- 消息的气泡颜色、间距、背景归 Telegram 客户端主题管，bot 改不了。浅色主题下几条通知糊在一起时，
+  bot 能做的只有在消息内部制造边界：默认给每条加了顶部分隔线（`separator`）与一行尾部空白（`gap_lines`），
+  两个都能关掉或调大。还嫌挤就在手机上长按这个 bot 的聊天 →「更改壁纸 / 主题」单独设一个。
 
 ## License
 

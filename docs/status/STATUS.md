@@ -1,11 +1,12 @@
 # 当前状态
 
-**更新时间**：2026-09-22
-**版本**：0.3.0（唯一事实源是 `claude_tg_notify/__init__.py` 的 `VERSION`，pyproject 动态读它）
+**更新时间**：2026-09-23
+**版本**：0.4.0（唯一事实源是 `claude_tg_notify/__init__.py` 的 `VERSION`，pyproject 动态读它）
 
 ## 一句话现状
 
-单文件已拆成七模块的包，110 条离线测试全过，打包与两种入口都在干净 venv 里验证过。
+七模块的包，129 条离线测试全过，打包与两种入口都在干净 venv 里验证过。
+0.4.0 把「任务完成」改成默认只报五行（会话 / 项目 / 耗时 / 这轮动了什么），正文要看得自己开 `collapsed` 或 `full`。
 本机五条 hook 已迁移到新入口并用真实命令做过管道测试。
 **按钮批准的真机路径仍然没有人点过** —— 这是唯一的功能性空白。
 
@@ -20,7 +21,9 @@
 | Notification 路径（无按钮版）| ✅ | 用真实 transcript 喂 `permission_prompt` 载荷，手机收到带会话标题的消息 |
 | 会话标题取自 transcript `custom-title` | ✅ | 同上，标题正确 |
 | 按钮消息发出、超时改写、按钮消失 | ✅ | `test --approve`：日志 `asked → poll failed(1 次, 恢复) → handed back (未响应)` |
-| 拆包后功能不变 | ✅ | 110 条测试全过，含原有全部行为断言 |
+| 拆包后功能不变 | ✅ | 129 条测试全过，含原有全部行为断言 |
+| `<blockquote expandable>` 真的能用 | ✅ | 2026-09-23 真机探测：sendMessage 接受该标签 |
+| minimal 形态 + 「这轮动了什么」那一行 | ✅ | 用真实 transcript 走完整 hook，手机收到五行消息，stdout 为空 |
 | 免安装垫片与 `-m` 模块入口 | ✅ | `tests/test_entrypoint.py` 用子进程真实执行两种入口 |
 | 打包元数据与 console script | ✅ | 干净 venv `pip install .` 后 `pip show` 与 `--version` 均为 0.3.0 |
 | 从 0.2.0 升级不留重复 hook | ✅ | 本机实迁移，`jq` 核对每个事件恰好 1 条、0 条旧路径残留；另有迁移测试 |

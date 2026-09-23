@@ -20,7 +20,7 @@ PKG = ROOT / "claude_tg_notify"
 
 #: 允许出现的绝对导入，全部是标准库。新增依赖必须先改这里，等于一道人工闸门。
 ALLOWED_ABSOLUTE = {
-    "argparse", "ast", "html", "json", "os", "pathlib", "re",
+    "argparse", "ast", "datetime", "html", "json", "os", "pathlib", "re",
     "subprocess", "sys", "time", "typing", "urllib", "uuid",
 }
 

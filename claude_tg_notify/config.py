@@ -64,6 +64,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "max_text_chars": 700,
     "skip_if_mac_active_seconds": 0,
     "allowed_user_ids": [],
+    "message_style": "minimal",
+    "show_activity": True,
+    "separator": "━━━━━━━━━━━━━━",
+    "gap_lines": 1,
     "events": {
         "stop": True,
         "permission_prompt": True,

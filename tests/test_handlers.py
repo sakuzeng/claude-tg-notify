@@ -87,10 +87,64 @@ class StopTests(BaseCase):
         self.assertFalse(sent[0]["disable_notification"])
         self.assertIn("任务完成", text)
         self.assertIn("修 bug &lt;b&gt;", text)
-        self.assertIn("已修复 &amp; 测试通过", text)
         self.assertIn("2 分 5 秒", text)
         self.assertIn("myproj", text)
         self.assertIn("#sess-123", text)
+        # 默认 minimal：只报哪个做完了，不搬正文。
+        self.assertNotIn("已修复 &amp; 测试通过", text)
+
+
+class StopStyleTests(BaseCase):
+    """message_style 三档 + 做了什么那一行。"""
+
+    def stop_text(self, transcript=None, **cfg_over):
+        if cfg_over:
+            cfg = config.load_config()
+            cfg.update(cfg_over)
+            config.save_config(cfg)
+        handlers.run_hook(payload("UserPromptSubmit", message="hi"))
+        self.started_seconds_ago(60)
+        handlers.run_hook(payload("Stop", last_assistant_message="正文 <b>在此</b>",
+                                  transcript_path=transcript))
+        return self.tg.sent()[0]["text"]
+
+    def test_minimal_is_the_default(self):
+        text = self.stop_text()
+        self.assertNotIn("正文", text)
+        self.assertLessEqual(len(text.strip().splitlines()), 6)
+
+    def test_full_carries_the_body(self):
+        text = self.stop_text(message_style="full")
+        self.assertIn("正文 &lt;b&gt;在此&lt;/b&gt;", text)
+        self.assertNotIn("blockquote", text)
+
+    def test_collapsed_wraps_body_in_expandable_quote(self):
+        text = self.stop_text(message_style="collapsed")
+        self.assertIn("<blockquote expandable>", text)
+        self.assertIn("正文 &lt;b&gt;在此&lt;/b&gt;", text)
+
+    def test_unknown_style_behaves_like_full(self):
+        self.assertIn("正文 &lt;b&gt;在此&lt;/b&gt;", self.stop_text(message_style="没听说过"))
+
+    def test_activity_line_added_from_transcript(self):
+        path = TMP / "stop-activity.jsonl"
+        path.write_text(json.dumps({
+            "type": "assistant", "timestamp": "2099-01-01T00:00:00.000Z",
+            "message": {"content": [{"type": "tool_use", "name": "Edit", "input": {"file_path": "/a/x.py"}},
+                                    {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}}]},
+        }) + "\n", encoding="utf-8")
+        text = self.stop_text(transcript=str(path))
+        self.assertIn("🛠", text)
+        self.assertIn("x.py", text)
+
+    def test_activity_can_be_turned_off(self):
+        path = TMP / "stop-activity.jsonl"
+        self.assertNotIn("🛠", self.stop_text(transcript=str(path), show_activity=False))
+
+    def test_message_shell_is_applied(self):
+        text = self.stop_text()
+        self.assertTrue(text.startswith("━"), text[:20])
+        self.assertTrue(text.endswith(telegram.BLANK_LINE), repr(text[-5:]))
 
     def test_second_stop_without_new_prompt_is_silent(self):
         handlers.run_hook(payload("UserPromptSubmit", message="hi"))

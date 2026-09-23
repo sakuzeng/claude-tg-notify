@@ -114,3 +114,96 @@ class DescribeSessionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TurnActivityTests(unittest.TestCase):
+    """本轮做了什么：纯读 transcript 的 tool_use 记录，不经过模型。"""
+
+    def write(self, name, records):
+        path = TMP / name
+        path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+        return str(path)
+
+    def tool_use(self, stamp, *tools):
+        content = [{"type": "tool_use", "name": n, "input": inp} for n, inp in tools]
+        return {"type": "assistant", "timestamp": stamp, "message": {"content": content}}
+
+    def test_missing_path_or_no_tools(self):
+        self.assertEqual(telegram.turn_activity(None, 0), "")
+        self.assertEqual(telegram.turn_activity("/nope/none.jsonl", 0), "")
+        path = self.write("act-empty.jsonl", [{"type": "user", "timestamp": "2026-01-01T00:00:00.000Z"}])
+        self.assertEqual(telegram.turn_activity(path, 0), "")
+
+    def test_counts_and_files(self):
+        path = self.write("act-basic.jsonl", [
+            self.tool_use("2026-01-01T00:00:10.000Z",
+                          ("Edit", {"file_path": "/a/handlers.py"}),
+                          ("Edit", {"file_path": "/a/telegram.py"}),
+                          ("Bash", {"command": "ls"})),
+            self.tool_use("2026-01-01T00:00:20.000Z", ("Edit", {"file_path": "/a/handlers.py"})),
+        ])
+        line = telegram.turn_activity(path, 0)
+        self.assertTrue(line.startswith("🛠 "), line)
+        self.assertIn("Edit×3", line)
+        self.assertIn("Bash", line)          # 只出现一次就不带 ×N
+        self.assertNotIn("Bash×", line)
+        self.assertIn("handlers.py", line)   # 同名文件只列一次
+        self.assertEqual(line.count("handlers.py"), 1)
+        self.assertIn("telegram.py", line)
+
+    def test_only_counts_this_turn(self):
+        path = self.write("act-since.jsonl", [
+            self.tool_use("2026-01-01T00:00:00.000Z", ("Read", {"file_path": "/a/old.py"})),
+            self.tool_use("2026-01-01T01:00:00.000Z", ("Write", {"file_path": "/a/new.py"})),
+        ])
+        since = telegram._parse_ts("2026-01-01T00:30:00.000Z")
+        line = telegram.turn_activity(path, since)
+        self.assertIn("Write", line)
+        self.assertNotIn("Read", line)
+        self.assertIn("new.py", line)
+
+    def test_caps_tools_and_files(self):
+        path = self.write("act-cap.jsonl", [self.tool_use(
+            "2026-01-01T00:00:10.000Z",
+            *[("T%d" % i, {}) for i in range(6)],
+            *[("Edit", {"file_path": "/a/f%d.py" % i}) for i in range(5)])])
+        line = telegram.turn_activity(path, 0)
+        self.assertIn("+3", line)   # 7 种工具里只显示 4 种
+        self.assertIn("+2", line)   # 5 个文件里只显示 3 个
+
+    def test_broken_lines_survive(self):
+        path = TMP / "act-broken.jsonl"
+        path.write_text('{"tool_use" 坏行\n' + json.dumps(
+            self.tool_use("2026-01-01T00:00:10.000Z", ("Bash", {"command": "ls"}))) + "\n", encoding="utf-8")
+        self.assertIn("Bash", telegram.turn_activity(str(path), 0))
+
+    def test_record_without_timestamp_is_ignored(self):
+        path = self.write("act-nots.jsonl", [
+            {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {}}]}}])
+        self.assertEqual(telegram.turn_activity(path, 0), "")
+
+    def test_html_escaped(self):
+        path = self.write("act-escape.jsonl", [
+            self.tool_use("2026-01-01T00:00:10.000Z", ("Write", {"file_path": "/a/a&b.py"}))])
+        self.assertIn("a&amp;b.py", telegram.turn_activity(path, 0))
+
+
+class DecorateTests(unittest.TestCase):
+    """分隔线与尾部空行：浅色主题下把相邻消息隔开。"""
+
+    def test_default_shell(self):
+        out = telegram.decorate({"separator": "━━━", "gap_lines": 1}, "正文")
+        self.assertEqual(out, "━━━\n正文\n" + telegram.BLANK_LINE)
+
+    def test_both_off(self):
+        self.assertEqual(telegram.decorate({"separator": "", "gap_lines": 0}, "正文"), "正文")
+
+    def test_missing_keys_mean_off(self):
+        self.assertEqual(telegram.decorate({}, "正文"), "正文")
+
+    def test_gap_is_capped_and_tolerant(self):
+        self.assertEqual(telegram.decorate({"gap_lines": 99}, "x").count(telegram.BLANK_LINE), 5)
+        self.assertEqual(telegram.decorate({"gap_lines": "坏值"}, "x"), "x")
+
+    def test_separator_is_escaped(self):
+        self.assertTrue(telegram.decorate({"separator": "<b>"}, "x").startswith("&lt;b&gt;"))

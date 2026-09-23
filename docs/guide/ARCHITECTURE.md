@@ -61,14 +61,31 @@ Telegram Bot API（api.telegram.org，可配 HTTP 代理）
 
 统一 HTML parse mode，所有来自会话的文本经 `html.escape`。
 
+每条消息出门前都过一遍 `telegram.decorate()`：顶部加 `separator` 分隔线，尾部补 `gap_lines` 行空白
+（盲文空白 U+2800 —— Telegram 会裁掉消息首尾的普通空白，但不认它是空白）。
+气泡颜色与间距归客户端主题管，bot 只能在消息内部制造边界，这两个开关就是为浅色主题下「几条糊成一片」准备的。
+
 ```text
+━━━━━━━━━━━━━━                       ← separator
 ✅ <b>任务完成</b>
 <b>会话</b>：<transcript 的 custom-title，没有则首条提示，截 80 字>
 <b>项目</b>：<cwd 的最后一段>  <code>#<sid 前 8 位></code>
 <b>耗时</b>：3 分 12 秒
-
-<last_assistant_message，截 max_text_chars>
+🛠 Bash×20 Edit×7 Read×5 Write · CLAUDE.md config.py telegram.py +2   ← show_activity
+⠀                                     ← gap_lines 行空白
 ```
+
+`message_style` 决定要不要接正文（默认 `minimal` = 不接）：
+
+| 值 | 正文 |
+|---|---|
+| `minimal` | 没有。消息固定五行，只回答「哪个会话做完了、花了多久、动了什么」 |
+| `collapsed` | `<blockquote expandable>` 包住，手机上折叠成三行，点一下展开（Bot API 7.0+，2026-09-23 真机验证可用）|
+| `full` | 直接跟在后面，截到 `max_text_chars` |
+
+「做了什么」那一行由 `telegram.turn_activity()` 生成：顺着 transcript 扫这一轮（`timestamp >= started_at`）的
+`tool_use` 记录，按工具名计数取前 4 种，再从 Edit / Write / MultiEdit / NotebookEdit 的 `file_path` 取前 3 个文件名。
+**全程只读文件、不调模型、不产生 token。**
 
 ```text
 🔔 <b>需要你批准</b>

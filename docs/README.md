@@ -5,6 +5,7 @@
 | 想知道 | 去哪 |
 |---|---|
 | 这是什么、为什么这样设计、怎么装 | [`../README.md`](../README.md) |
+| 改这个仓库之前要知道的铁律与命令 | [`../CLAUDE.md`](../CLAUDE.md) |
 | 现在处在哪、哪些已验证哪些没有 | [`status/STATUS.md`](status/STATUS.md) |
 | 接下来做什么 | [`status/BACKLOG.md`](status/BACKLOG.md)（做完一条就删一条） |
 | 数据流、状态文件、消息格式、并发设计 | [`guide/ARCHITECTURE.md`](guide/ARCHITECTURE.md) |

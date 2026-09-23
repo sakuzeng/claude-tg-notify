@@ -27,6 +27,29 @@
 
 ## P2 功能缺口
 
+- **消息太长，想要"只提醒、不复述"。** 2026-09-23 用户提出：手机上只要知道"完成了"或"要你确认"，
+  不需要把 Claude 的最后一段回复整段搬过去。现在 `max_text_chars` 默认 700，一条通知能刷满半屏。
+  在哪：`claude_tg_notify/handlers.py:83`（任务完成拼装）、`:118`（需要你处理拼装）、`claude_tg_notify/telegram.py:24`（`truncate`）。
+  **先澄清一个误解**：正文不花 token。它来自 hook 载荷里的 `last_assistant_message`，从磁盘读、直接发走，全程不过模型；
+  所以代价只有"一屏看不完"，解法应当是折叠而不是砍掉信息。
+  候选设计：新增 `message_style` 三档 —— `full`（现状）/ `collapsed`（正文包进 `<blockquote expandable>`，默认折叠成三行，点一下展开）/
+  `minimal`（不带正文，只剩标题 + 会话 + 项目 + 耗时四行）。默认给 `collapsed`。
+  为什么要紧：这是每天都在看的东西，长度直接决定它是工具还是噪音。
+  验证：先确认 `<blockquote expandable>` 在 HTML parse mode 下真的可用（Bot API 7.0+ 才有；不可用就退回不可折叠的 `<blockquote>`）；
+  再 `./claude-tg-notify test`，手机上默认三行以内、点开是全文，`message_style=minimal` 时消息里没有正文段。
+
+- **浅色主题下相邻消息糊成一片。** 2026-09-23 用户提出：TG 白底时连续几条 bot 消息之间没有视觉边界，要逐字读才分得清哪条是哪条。
+  在哪：同上的拼装处；格式的唯一事实源是 [`../guide/ARCHITECTURE.md`](../guide/ARCHITECTURE.md) 的「消息格式」，改了要同步。
+  **bot 改不了的**：气泡颜色、聊天背景、字体 —— 那是 Telegram 客户端主题，只能用户自己长按聊天 →「更改壁纸/主题」单独设。
+  这条属于使用提示，写进 README，不要当成待开发功能。
+  **bot 能改的**（按性价比排）：
+  1. 首行加色块前缀 `🟩 任务完成` / `🟨 需要你批准` / `🟥 被拒绝`，白底上是明确色带，改动最小；
+  2. 正文包进 `<blockquote>`，Telegram 渲染成左竖线 + 浅底，天然把元信息和正文分块（与上一条的折叠方案是同一个改动）；
+  3. 会话/项目/耗时压成一行 `<code>`，灰底，与正文形成明暗对比；
+  4. 末尾一条 `<b>━━━━━━━━━━</b>` 分隔线，最土但最有效，留作备选。
+  为什么要紧：通知的价值在于扫一眼就知道要不要处理，扫不出来等于没通知。
+  验证：浅色主题下连发三条不同类型消息（`test`、`test --approve`、伪造一条 `permission_denied` 载荷），截图看三条边界是否一眼可辨。
+
 - **Linux 空闲检测。** `mac_idle_seconds` 在非 darwin 直接返回 None，`skip_if_mac_active_seconds` 与 `approve.skip_if_mac_active_seconds` 在 Linux 上失效（总是发）。
   候选 `xprintidle`。验证：Linux 上 `status` 之外增加一条 `idle` 诊断输出。
 

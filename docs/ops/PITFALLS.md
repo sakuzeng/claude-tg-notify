@@ -11,7 +11,7 @@
 | 2 | 2026-09-22 | 官方推送 | vivo 开着 Google 基础服务仍收不到，通知历史为空：FCM token 没注册上，这条路放弃 |
 | 3 | 2026-09-22 | 官方推送 | 内置 `PushNotification` 在终端活跃时拒发，只能靠延时 cron 才测出链路是通的 |
 | 4 | 2026-09-22 | hook | `UserPromptSubmit` 的 stdout 会进模型上下文 |
-| 5 | 2026-09-22 | hook | `PermissionRequest` 在 auto 模式根本不触发 |
+| 5 | 2026-09-22 | hook | ~~`PermissionRequest` 在 auto 模式不触发~~ 官方文档这么说，实测照样触发（2026-09-23 更正）|
 | 6 | 2026-09-22 | Telegram | `getUpdates` 单消费者；多会话同时等会互相吞点击 |
 | 7 | 2026-09-22 | Telegram | 轮询偶发 `EOF occurred in violation of protocol (_ssl.c:1129)` |
 | 8 | 2026-09-22 | 开发流程 | 用 Bash 里的 Python 补丁脚本改 hook 代码被 auto 模式分类器以 Self-Modification 拒绝 |
@@ -46,11 +46,23 @@
 - 解法：`run_hook` 对除 `PermissionRequest` 外的所有事件返回 `None`，`cmd_hook` 只在有返回值时才写 stdout；日志一律进文件。
 - 已回写代码：是（`cmd_hook`、`run_hook`）。
 
-### 5. `PermissionRequest` 不在 auto 模式触发（2026-09-22，hook）
+### 5. 官方文档说 `PermissionRequest` 不在 auto 模式触发，实测不符（2026-09-22 记录，2026-09-23 更正，hook）
+
+> **2026-09-23 更正**：原结论错了。本机日志里 auto 模式的会话照样触发了这条 hook：
+> ```
+> 2026-09-22 15:31:55 approve: Mac active 10s ago, leaving the prompt to the terminal
+> 2026-09-22 15:32:03 sent permission_prompt for 6d80e572
+> 2026-09-22 17:17:36 approve: asked for 314794de (AskUserQuestion, req 9ecc9830afeb)
+> ```
+> 会话 `6d80e572` 与 `314794de` 当时都是 auto 模式，触发的工具是 `AskUserQuestion`。
+> 合理解释：auto 模式下分类器认为"该问人"的调用仍然走权限流程，只是不出现在终端的确认提示里。
+> 原文保留在下面，作为"照抄文档没实测"的样本。
+
 - 现象：桌面 App 的会话用 auto 模式，装了 hook 也永远看不到按钮消息。
-- 原因：官方文档："only fires in manual permission modes"；auto 模式由分类器决定，拒绝时走 `PermissionDenied`。
+- 原因（已被推翻）：官方文档："only fires in manual permission modes"；auto 模式由分类器决定，拒绝时走 `PermissionDenied`。
 - 解法：接受。README 边界里写明；顺手加了默认关闭的 `permission_denied` 事件，auto 模式下至少能知道被拦了。
-- 已回写代码：是（`handle_permission_denied`），文档见 [`../guide/HOOKS.md`](../guide/HOOKS.md)。
+- 已回写代码：是（`handle_permission_denied`）。**更正尚未回写到 [`../guide/HOOKS.md`](../guide/HOOKS.md) 与 README 边界**，
+  因为还没搞清楚"哪些工具在 auto 模式下仍走权限流程"的准确边界 —— 目前只有 `AskUserQuestion` 一个样本，见 BACKLOG P0。
 
 ### 6. `getUpdates` 只允许一个消费者（2026-09-22，Telegram）
 - 现象：设计阶段就能预见：两个会话各自 `getUpdates`，A 拉走的更新 B 永远看不到；A 又只认自己的 req，B 的点击就丢了。

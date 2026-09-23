@@ -27,12 +27,10 @@
 
 ## P2 功能缺口
 
-- **0.4.0 的消息形态要在手机上用几天再定。** 已交付：`message_style=minimal`（默认）、一行「这轮动了什么」、
-  顶部分隔线 `separator` + 尾部空白 `gap_lines=1`。在哪：`claude_tg_notify/telegram.py` 的 `decorate` 与 `turn_activity`、
-  `claude_tg_notify/handlers.py:82` 起。
-  还没定的：分隔线长度（现在 14 个 `━`）、`gap_lines` 到底 1 行够不够、工具那一行截到 4 种工具 3 个文件是否合适。
-  为什么要紧：这几个数字只有在真实使用里才知道，改起来是一行配置，别凭空调。
-  验证：连着用两天，如果还得眯眼找边界就把 `gap_lines` 调到 2；如果嫌吵就把 `separator` 清空。
+- **仓库默认仍是 `minimal`，作者自己用的是 `collapsed`。** 在哪：`claude_tg_notify/config.py` 的 `DEFAULT_CONFIG`。
+  为什么没跟着改：默认值是给第一次装的人的，`minimal` 更接近"只提醒不复述"这个定位；
+  `collapsed` 好在能点开看全文，但得先知道有这么个交互。用一段时间如果发现从没展开过，就把默认也挪过去。
+  验证：不需要验证，是个取舍，改一行。
 
 - **Linux 空闲检测。** `mac_idle_seconds` 在非 darwin 直接返回 None，`skip_if_mac_active_seconds` 与 `approve.skip_if_mac_active_seconds` 在 Linux 上失效（总是发）。
   候选 `xprintidle`。验证：Linux 上 `status` 之外增加一条 `idle` 诊断输出。

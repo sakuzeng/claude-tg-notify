@@ -5,6 +5,6 @@
 """
 
 APP = "claude-tg-notify"
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 __all__ = ["APP", "VERSION"]

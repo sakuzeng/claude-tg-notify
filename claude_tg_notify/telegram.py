@@ -155,13 +155,15 @@ def turn_activity(transcript_path: Optional[str], since: float) -> str:
     shown = ["%s×%d" % (n, c) if c > 1 else n for n, c in ranked[:ACTIVITY_MAX_TOOLS]]
     if len(ranked) > ACTIVITY_MAX_TOOLS:
         shown.append("+%d" % (len(ranked) - ACTIVITY_MAX_TOOLS))
-    line = "🛠 " + " ".join(shown)
-    if files:
-        names = files[:ACTIVITY_MAX_FILES]
-        if len(files) > ACTIVITY_MAX_FILES:
-            names = names + ["+%d" % (len(files) - ACTIVITY_MAX_FILES)]
-        line += " · " + " ".join(names)
-    return html.escape(line)
+    line = html.escape("🛠 " + " ".join(shown))
+    if not files:
+        return line
+    names = files[:ACTIVITY_MAX_FILES]
+    if len(files) > ACTIVITY_MAX_FILES:
+        names = names + ["+%d" % (len(files) - ACTIVITY_MAX_FILES)]
+    # 裸文件名会被 Telegram 当网址自动加链接（.md 是摩尔多瓦、.py 是巴拉圭的顶级域名），
+    # 点一下跳浏览器。包进 <code> 就不再检测，顺带得到一块浅底，花纹壁纸上也更好认。
+    return line + " · <code>%s</code>" % html.escape(" ".join(names))
 
 
 def decorate(cfg: Dict[str, Any], text: str) -> str:

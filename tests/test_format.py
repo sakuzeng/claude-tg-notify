@@ -182,6 +182,13 @@ class TurnActivityTests(unittest.TestCase):
             {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {}}]}}])
         self.assertEqual(telegram.turn_activity(path, 0), "")
 
+    def test_filenames_are_wrapped_in_code(self):
+        """裸文件名会被 Telegram 当网址（.md / .py 都是真实顶级域名），必须包进 <code>。"""
+        path = self.write("act-link.jsonl", [
+            self.tool_use("2026-01-01T00:00:10.000Z", ("Edit", {"file_path": "/a/README.md"}))])
+        line = telegram.turn_activity(path, 0)
+        self.assertIn("<code>README.md</code>", line)
+
     def test_html_escaped(self):
         path = self.write("act-escape.jsonl", [
             self.tool_use("2026-01-01T00:00:10.000Z", ("Write", {"file_path": "/a/a&b.py"}))])

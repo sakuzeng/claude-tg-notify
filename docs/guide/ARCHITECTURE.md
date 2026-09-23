@@ -85,6 +85,7 @@ Telegram Bot API（api.telegram.org，可配 HTTP 代理）
 
 「做了什么」那一行由 `telegram.turn_activity()` 生成：顺着 transcript 扫这一轮（`timestamp >= started_at`）的
 `tool_use` 记录，按工具名计数取前 4 种，再从 Edit / Write / MultiEdit / NotebookEdit 的 `file_path` 取前 3 个文件名。
+文件名必须包在 `<code>` 里 —— 裸着写会被 Telegram 当网址自动加链接（见 [`../ops/PITFALLS.md`](../ops/PITFALLS.md) 第 13 条）。
 **全程只读文件、不调模型、不产生 token。**
 
 ```text

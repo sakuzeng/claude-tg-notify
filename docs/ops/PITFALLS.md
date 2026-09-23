@@ -19,6 +19,8 @@
 | 10 | 2026-09-22 | 拆包 | 改 hook 入口文件名会让旧条目认不出来，升级后 settings.json 里留下重复 hook |
 | 11 | 2026-09-22 | 拆包 | 旧的 `claude_tg_notify.py` 没删，setuptools 读版本号读到它，包版本停在 0.2.0 |
 | 12 | 2026-09-22 | 拆包 | `from .telegram import send_message` 会让测试打桩静默失效 |
+| 13 | 2026-09-23 | Telegram | 消息里的裸文件名被自动识别成网址加链接，`.md` / `.py` 都是真实顶级域名 |
+| 14 | 2026-09-23 | Telegram | 气泡颜色与透明度归客户端主题管；收到的消息看不清是壁纸透上来，不是 bot 能改的 |
 
 ## 记录
 
@@ -112,3 +114,20 @@
 - 解法：定死约定 —— 跨模块一律 `from . import telegram` 再 `telegram.send_message(...)`。
   这条约定由 `tests/test_layout.py::CallConventionTests` 用 AST 强制，写错直接测试失败。
 - 已回写代码：是（全部模块 + 静态约束测试）。
+
+### 13. 文件名被自动变成链接（2026-09-23，Telegram）
+- 现象：「任务完成」里那行 `🛠 Edit×7 · README.md config.py telegram.py` 的文件名带下划线，点一下跳浏览器。
+- 原因：Telegram 服务端对消息正文做自动实体识别，`.md`（摩尔多瓦）、`.py`（巴拉圭）都是真实顶级域名，
+  `README.md` 在它眼里就是个网址。`disable_web_page_preview` 只挡预览卡片，挡不住链接本身。
+- 解法：包进 `<code>`。**验证方法不用看手机** —— `sendMessage` 的返回值里带 Telegram 解析出的 `entities`：
+  裸发回来是 `['url', 'url']`，包进 `<code>` 后是 `['code']`。
+- 已回写代码：是（`telegram.turn_activity` 末尾），回归测试 `test_filenames_are_wrapped_in_code`。
+
+### 14. 收到的消息在花纹壁纸上看不清（2026-09-23，Telegram）
+- 现象：同一张壁纸下，自己发的消息（蓝色实心气泡）清楚，bot 发来的消息糊成一片。
+- 原因：不是背景不同，是**气泡不同**。Telegram 给"发出"和"收到"两种气泡分别配色，
+  浅色主题里"收到"那种接近白色且偏透，壁纸的花纹直接透上来压在文字下面。
+  气泡颜色、透明度、间距全由客户端主题决定，Bot API 里没有任何字段能影响它。
+- 解法：客户端侧解决 —— 给这个聊天单独换纯色壁纸，或换深色主题。
+  bot 侧只能在消息内部制造对比：分隔线（`separator`）、尾部空行（`gap_lines`）、把关键片段包进 `<code>` 拿浅底。
+- 已回写代码：部分（`decorate` 与 `turn_activity` 的 `<code>`），其余写进 README 边界。

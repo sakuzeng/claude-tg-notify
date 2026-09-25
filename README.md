@@ -76,7 +76,12 @@ cd claude-tg-notify
 - 不能从 Telegram 给会话发新指令。那是 Remote Control 的事，本项目只做"通知 + 一次性决定"。
 - 一个 bot 只服务一台机器。`getUpdates` 单消费者的限制决定了两台 Mac 共用一个 bot 会互相吞点击。
 - 手机得能连上 Telegram。这一条在国内意味着 Telegram 内要设代理。
-- 空闲检测只在 macOS 上有（`ioreg`）。Linux 上视为"不在电脑前"，总是发。
+- **空闲检测只知道你有没有碰键鼠，不知道你的眼睛在哪。** `ioreg` 的 `HIDIdleTime` 是唯一的信号，
+  所以你盯着屏幕看、两分钟没动键鼠，也会被判成"不在电脑前"，短轮照推。嫌吵把 `away_after_seconds` 调大。
+- 空闲检测只有 macOS 有。其他平台上两个空闲判断都返回"不成立"：`skip_if_mac_active_seconds` 从不跳过（照发），
+  `away_after_seconds` 从不放行（沿用 `min_turn_seconds`）。两边都取保守方向，不会因为探测不到就突然刷屏。
+- 通知可能被规则跳过，而**跳过和延迟长得一样**。觉得没收到先看日志，对照
+  [`docs/ops/TROUBLESHOOTING.md`](docs/ops/TROUBLESHOOTING.md) 的速查表。
 - **Bot API 里没有任何颜色或样式参数。** 能发的只有粗体、等宽、引用、链接这类"这段是什么"的标记，
   具体长什么样（气泡颜色与透明度、引用块的底、字色、消息间距）全由 Telegram 客户端主题决定。
   消息在花纹壁纸上看不清，是半透明气泡把壁纸透上来了,这个问题只能在客户端解决：

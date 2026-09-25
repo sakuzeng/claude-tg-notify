@@ -19,6 +19,9 @@
 7. **不要用 Bash 里的 Python 补丁脚本改本项目代码。** auto 模式的分类器会判定 Self-Modification 并拒绝
    （PITFALL 8）。用 Read / Edit / Write 工具改。
 8. **发真消息会响用户的手机。** `test`、`test --approve` 以及任何直接调 Bot API 的验证，发之前先说一声。
+9. **用户说"没收到"时，先查日志再改代码。** 每次发送/跳过/失败都有一行。
+   至今所有"怎么这么慢还没来"的案例，真因都是被某条规则跳过了，**一条都不是延迟**。
+   速查表在 [`docs/ops/TROUBLESHOOTING.md`](docs/ops/TROUBLESHOOTING.md)，新增跳过路径要同步加一行。
 
 ## 文档体系
 
@@ -31,6 +34,7 @@
 | 模块划分、数据流、**消息格式**、并发设计 | [`docs/guide/ARCHITECTURE.md`](docs/guide/ARCHITECTURE.md) |
 | 配置项与默认值 | [`docs/guide/CONFIG.md`](docs/guide/CONFIG.md) |
 | Claude Code hook 契约：输入字段、输出格式、超时 | [`docs/guide/HOOKS.md`](docs/guide/HOOKS.md) |
+| 某条消息为什么没发、日志每行什么意思 | [`docs/ops/TROUBLESHOOTING.md`](docs/ops/TROUBLESHOOTING.md) |
 | 踩过的坑 | [`docs/ops/PITFALLS.md`](docs/ops/PITFALLS.md) |
 
 **开工姿势**：先读 `STATUS.md` 的"已验证 / 未验证"表，再读 `BACKLOG.md`。
@@ -42,7 +46,7 @@
 python3 -m unittest discover -s tests          # 140 条离线测试，全部用假 Telegram，不会真发消息
 ./claude-tg-notify status                      # 生效配置、装了哪几条 hook、最近日志（token 打码）
 ./claude-tg-notify install                     # 把 5 条 hook 合并进 ~/.claude/settings.json（先备份，幂等）
-tail -20 ~/.cache/claude-tg-notify/notify.log  # 每次发送/跳过/失败一行，排查第一站
+tail -30 ~/.cache/claude-tg-notify/notify.log  # 每次发送/跳过/失败一行，排查第一站
 ```
 
 - 真实配置在 `~/.config/claude-tg-notify/config.json`（**不在仓库里**，权限 600，含 bot token）。

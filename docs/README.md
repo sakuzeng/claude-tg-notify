@@ -11,6 +11,7 @@
 | 数据流、状态文件、消息格式、并发设计 | [`guide/ARCHITECTURE.md`](guide/ARCHITECTURE.md) |
 | 每个配置项的含义与默认值 | [`guide/CONFIG.md`](guide/CONFIG.md) |
 | 用到的 Claude Code hook：输入字段、输出格式、超时、哪些模式触发 | [`guide/HOOKS.md`](guide/HOOKS.md) |
+| 某条消息为什么没发 / 日志每行什么意思 | [`ops/TROUBLESHOOTING.md`](ops/TROUBLESHOOTING.md) |
 | 踩过的坑 | [`ops/PITFALLS.md`](ops/PITFALLS.md)（现象 → 原因 → 解法） |
 | 为什么选 Telegram 而不是官方推送 / Server酱 / ntfy | [`research/PUSH_CHANNELS.md`](research/PUSH_CHANNELS.md) |
 | 边界与路线图 | [`plan/ROADMAP.md`](plan/ROADMAP.md) |

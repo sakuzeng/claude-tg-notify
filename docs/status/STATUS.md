@@ -1,7 +1,7 @@
 # 当前状态
 
-**更新时间**：2026-09-23
-**版本**：0.4.1（唯一事实源是 `claude_tg_notify/__init__.py` 的 `VERSION`，pyproject 动态读它）
+**更新时间**：2026-09-25
+**版本**：0.4.2（唯一事实源是 `claude_tg_notify/__init__.py` 的 `VERSION`，pyproject 动态读它）
 
 ## 一句话现状
 
@@ -22,11 +22,12 @@
 | Notification 路径（无按钮版）| ✅ | 用真实 transcript 喂 `permission_prompt` 载荷，手机收到带会话标题的消息 |
 | 会话标题取自 transcript `custom-title` | ✅ | 同上，标题正确 |
 | 按钮消息发出、超时改写、按钮消失 | ✅ | `test --approve`：日志 `asked → poll failed(1 次, 恢复) → handed back (未响应)` |
-| 拆包后功能不变 | ✅ | 130 条测试全过，含原有全部行为断言 |
+| 拆包后功能不变 | ✅ | 135 条测试全过，含原有全部行为断言 |
 | `<blockquote expandable>` 真的能用 | ✅ | 2026-09-23 真机探测：sendMessage 接受该标签 |
 | minimal 形态 + 「这轮动了什么」那一行 | ✅ | 用真实 transcript 走完整 hook，手机收到五行消息，stdout 为空 |
 | 文件名不再被当成链接 | ✅ | `sendMessage` 返回的 `entities`：裸发 `['url','url']`，包 `<code>` 后 `['code']` |
 | `message_style=collapsed` 真机可用 | ✅ | 手机上折叠成三行、右下角可展开；作者本机配置已切到这一档 |
+| 注入型提示不再截断耗时 | ✅ | 用 09-25 的真实时序回放到已装的 hook：报 232 秒并发出，日志留下 keeping start |
 | 免安装垫片与 `-m` 模块入口 | ✅ | `tests/test_entrypoint.py` 用子进程真实执行两种入口 |
 | 打包元数据与 console script | ✅ | 干净 venv `pip install .` 后 `pip show` 与 `--version` 均为 0.3.0 |
 | 从 0.2.0 升级不留重复 hook | ✅ | 本机实迁移，`jq` 核对每个事件恰好 1 条、0 条旧路径残留；另有迁移测试 |

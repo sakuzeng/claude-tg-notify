@@ -22,18 +22,35 @@ NOTIFICATION_HEADERS = {
 #: install 写进 settings.json 的 Notification matcher。
 NOTIFICATION_MATCHER = "permission_prompt|elicitation_dialog|agent_needs_input|idle_prompt"
 
+#: 一轮的起点超过这么久还没等到 Stop，就当那次 Stop 丢了，重新计时。
+STALE_TURN_SECONDS = 6 * 3600
+
 
 # ---------------------------------------------------------------------------
 # UserPromptSubmit
 # ---------------------------------------------------------------------------
 
 def handle_user_prompt(cfg: Dict[str, Any], data: Dict[str, Any]) -> None:
-    """只写状态文件，不联网。配置没填也能正常工作。"""
+    """只写状态文件，不联网。配置没填也能正常工作。
+
+    **起点只记一次。** 这个事件不只在你敲回车时触发 —— 后台任务完成后注入会话的提示、
+    排队发出的消息，同样会触发它。无条件重置 `started_at` 会把一轮的耗时缩成最后一小段，
+    长任务反而被 `min_turn_seconds` 拦掉（PITFALL 15）。起点由 Stop 负责清空。
+    """
     if data.get("agent_id"):
         return
     sid = data.get("session_id", "")
     st = state.load_state(sid)
-    st["started_at"] = time.time()
+    now = time.time()
+    try:
+        started = float(st.get("started_at") or 0)
+    except (TypeError, ValueError):
+        started = 0.0
+    if not started or now - started > STALE_TURN_SECONDS:
+        # 没有起点，或上一次 Stop 丢了（进程被杀、/clear 之类），重新计时。
+        st["started_at"] = now
+    else:
+        config.log("turn for %s already running %.0fs, keeping start" % (sid[:8], now - started))
     st["cwd"] = data.get("cwd", "")
     prompt = (data.get("message") or "").strip()
     if prompt and not st.get("first_prompt"):

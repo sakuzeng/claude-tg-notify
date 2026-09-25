@@ -1,5 +1,16 @@
 # 变更记录
 
+## 0.4.2 — 2026-09-25
+
+- **修一轮的计时起点被静默重置。** `UserPromptSubmit` 不只在你敲回车时触发 —— 后台任务完成后
+  注入会话的提示、排队发出的消息同样会触发它，而 `handle_user_prompt` 无条件重置 `started_at`，
+  于是一轮的耗时被缩成最后一小段，**恰恰是会开后台 agent 的长任务最容易被 `min_turn_seconds` 拦掉**。
+  现在起点只记一次，由 Stop 负责清空；超过 6 小时（`STALE_TURN_SECONDS`）视为上次 Stop 丢了，重新计时。
+  现场与验算见 [`docs/ops/PITFALLS.md`](docs/ops/PITFALLS.md) 第 15 条。
+- 中途被注入打断时写一行日志（`turn for <sid> already running Ns, keeping start`），
+  这个事件原本什么都不记，出问题只能靠时间戳反推。
+- 测试 130 → 135 条，含 2026-09-25 现场的回归用例。
+
 ## 0.4.1 — 2026-09-23
 
 - 「这轮动了什么」里的文件名包进 `<code>`。裸着写会被 Telegram 自动识别成网址加链接

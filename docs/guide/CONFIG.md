@@ -9,7 +9,7 @@
 | `bot_token` | `""` | @BotFather 给的 token，`setup` 写入 |
 | `chat_id` | `""` | 收消息的聊天；`setup` 从你发给 bot 的第一条消息自动取 |
 | `proxy` | `""` | HTTP 代理，如 `http://127.0.0.1:7890`；留空直连。Clash TUN 模式不需要 |
-| `min_turn_seconds` | `60` | 一轮少于这个秒数不推"任务完成"。调小会让日常问答开始刷屏 |
+| `min_turn_seconds` | `60` | 一轮少于这个秒数不推"任务完成"。调小会让日常问答开始刷屏。计时从你这一轮的第一条提示算起，中途注入的后台任务通知不会重置它（PITFALL 15）|
 | `min_interval_seconds` | `30` | 同一会话、同一类通知的最短间隔 |
 | `message_style` | `minimal` | 「任务完成」带不带正文：`minimal` 不带（只剩五行）/ `collapsed` 正文折叠进可展开引用 / `full` 直接摊开。**只管这一类消息**，「需要你批准 / 回答」的正文是问题本身，永远带 |
 | `show_activity` | `true` | 「任务完成」里加一行本轮用过的工具与改过的文件，从 transcript 数出来，不经过模型 |

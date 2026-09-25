@@ -62,6 +62,50 @@ class UserPromptTests(BaseCase):
         self.assertTrue(state.load_state(SID)["started_at"])
 
 
+class TurnStartTests(BaseCase):
+    """起点只记一次 —— 后台任务注入的提示不能把耗时截断（PITFALL 15）。"""
+
+    def test_injected_prompt_does_not_reset_the_clock(self):
+        handlers.run_hook(payload("UserPromptSubmit", message="可以"))
+        self.started_seconds_ago(232)
+        first = state.load_state(SID)["started_at"]
+        handlers.run_hook(payload("UserPromptSubmit",
+                                  message="<task-notification><task-id>abc</task-id></task-notification>"))
+        self.assertEqual(state.load_state(SID)["started_at"], first)
+
+    def test_long_turn_survives_an_injection(self):
+        """复现 2026-09-25 的现场：真跑了 232 秒，中途来了条任务通知。"""
+        handlers.run_hook(payload("UserPromptSubmit", message="可以"))
+        self.started_seconds_ago(232)
+        handlers.run_hook(payload("UserPromptSubmit", message="<task-notification/>"))
+        handlers.run_hook(payload("Stop", last_assistant_message="所有改动已提交"))
+        self.assertEqual(len(self.tg.sent()), 1)
+        self.assertIn("3 分 52 秒", self.tg.sent()[0]["text"])
+
+    def test_next_turn_starts_a_new_clock(self):
+        handlers.run_hook(payload("UserPromptSubmit", message="第一轮"))
+        self.started_seconds_ago(200)
+        handlers.run_hook(payload("Stop", last_assistant_message="done"))
+        handlers.run_hook(payload("UserPromptSubmit", message="第二轮"))
+        handlers.run_hook(payload("Stop", last_assistant_message="quick"))
+        self.assertEqual(len(self.tg.sent()), 1)          # 第二轮太短，只发了第一轮
+
+    def test_stale_start_is_discarded(self):
+        """上一次 Stop 丢了的话，起点不能一直留着让耗时虚高。"""
+        handlers.run_hook(payload("UserPromptSubmit", message="很久以前"))
+        self.started_seconds_ago(handlers.STALE_TURN_SECONDS + 60)
+        handlers.run_hook(payload("UserPromptSubmit", message="新的一轮"))
+        handlers.run_hook(payload("Stop", last_assistant_message="x"))
+        self.assertEqual(self.tg.sent(), [])              # 重新计时 → 这轮太短 → 不发
+
+    def test_broken_start_value_recovers(self):
+        st = state.load_state(SID)
+        st["started_at"] = "坏值"
+        state.save_state(SID, st)
+        handlers.run_hook(payload("UserPromptSubmit", message="hi"))
+        self.assertIsInstance(state.load_state(SID)["started_at"], float)
+
+
 class StopTests(BaseCase):
     def test_short_turn_not_sent(self):
         handlers.run_hook(payload("UserPromptSubmit", message="hi"))

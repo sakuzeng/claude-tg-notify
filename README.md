@@ -58,7 +58,7 @@ cd claude-tg-notify
 |---|---|
 | `claude-tg-notify` | 命令行与 hook 入口垫片，免安装直跑 |
 | `claude_tg_notify/` | 包：`config` 路径与配置、`state` 会话状态与节流、`telegram` API 与文案、`approval` 远程批准、`handlers` 事件分发、`install` 写 settings.json、`cli` 命令行 |
-| `tests/` | 130 条离线测试：假 Telegram 跑通全部路径，加入口子进程测试与包结构静态约束。`python3 -m unittest discover -s tests` |
+| `tests/` | 135 条离线测试：假 Telegram 跑通全部路径，加入口子进程测试与包结构静态约束。`python3 -m unittest discover -s tests` |
 | `config.example.json` | 配置项全集与默认值，真实配置在 `~/.config/claude-tg-notify/config.json` |
 | `docs/guide/` | 常青规范：架构与数据流、配置项、用到的 Claude Code hook 契约 |
 | `docs/ops/` | 踩坑记录 |

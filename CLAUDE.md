@@ -39,7 +39,7 @@
 ## 环境与命令
 
 ```bash
-python3 -m unittest discover -s tests          # 135 条离线测试，全部用假 Telegram，不会真发消息
+python3 -m unittest discover -s tests          # 140 条离线测试，全部用假 Telegram，不会真发消息
 ./claude-tg-notify status                      # 生效配置、装了哪几条 hook、最近日志（token 打码）
 ./claude-tg-notify install                     # 把 5 条 hook 合并进 ~/.claude/settings.json（先备份，幂等）
 tail -20 ~/.cache/claude-tg-notify/notify.log  # 每次发送/跳过/失败一行，排查第一站

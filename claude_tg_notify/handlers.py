@@ -90,7 +90,9 @@ def handle_stop(cfg: Dict[str, Any], data: Dict[str, Any]) -> None:
 
     elapsed = time.time() - float(started)
     min_turn = float(cfg.get("min_turn_seconds") or 0)
-    if elapsed < min_turn:
+    away = state.user_is_away(cfg)
+    if elapsed < min_turn and not away:
+        # 阈值只用来挡"你就坐在 Mac 前"时的日常问答刷屏。人不在，再短的一轮也值得推。
         config.log("skipped stop: turn %.0fs < %.0fs" % (elapsed, min_turn))
         return
     if state.should_skip_for_presence(cfg):
@@ -114,7 +116,7 @@ def handle_stop(cfg: Dict[str, Any], data: Dict[str, Any]) -> None:
     if telegram.send_message(cfg, text, "stop") is not None:
         state.mark_sent(st, "stop")
         state.save_state(sid, st)
-        config.log("sent stop for %s (%.0fs)" % (sid[:8], elapsed))
+        config.log("sent stop for %s (%.0fs%s)" % (sid[:8], elapsed, "，你不在 Mac 前" if away else ""))
 
 
 # ---------------------------------------------------------------------------

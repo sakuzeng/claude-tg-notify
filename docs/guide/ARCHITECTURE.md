@@ -35,7 +35,7 @@ Claude Code 在生命周期节点上以子进程方式调 `python3 <仓库>/clau
 Claude Code 会话
   │ UserPromptSubmit ──► 写 sessions/<sid>.json: started_at, cwd, first_prompt   （不联网）
   │                     started_at 只记一次：注入型提示也触发本事件，覆盖会截断耗时
-  │ Stop ─────────────► 算耗时 ≥ min_turn_seconds ? sendMessage(任务完成) : 跳过
+  │ Stop ─────────────► 耗时 ≥ min_turn_seconds 或人不在 Mac 前 ? sendMessage(任务完成) : 跳过
   │                     顺手 editMessageText 把 pending_msgs 改成"已处理"
   │ Notification ─────► sendMessage(需要你处理)，message_id 记进 pending_msgs
   │ PermissionRequest ► sendMessage(带 inline 按钮) ─► 等待 ─► stdout 输出 decision 或什么都不输出

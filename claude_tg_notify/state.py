@@ -67,6 +67,20 @@ def should_skip_for_presence(cfg: Dict[str, Any]) -> bool:
     return False
 
 
+def user_is_away(cfg: Dict[str, Any]) -> bool:
+    """Mac 闲置够久 = 你大概不在电脑前。
+
+    `min_turn_seconds` 是拿耗时去**猜**"你可能已经走开了"；这个函数直接测。
+    在手机上驱动会话时，54 秒的回答一样需要推送 —— 没有终端可看。
+    探测不到空闲时间（非 macOS）时返回 False：宁可沿用阈值，也不要突然开始刷屏。
+    """
+    threshold = float(cfg.get("away_after_seconds") or 0)
+    if threshold <= 0:
+        return False
+    idle = config.mac_idle_seconds()
+    return idle is not None and idle >= threshold
+
+
 # ---------------------------------------------------------------------------
 # 待处理消息
 # ---------------------------------------------------------------------------

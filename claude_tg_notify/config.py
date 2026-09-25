@@ -60,6 +60,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "chat_id": "",
     "proxy": "",
     "min_turn_seconds": 60,
+    "away_after_seconds": 120,
     "min_interval_seconds": 30,
     "max_text_chars": 700,
     "skip_if_mac_active_seconds": 0,

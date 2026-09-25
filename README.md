@@ -21,8 +21,10 @@
 - **为什么零依赖、还留一个根目录垫片。** hook 是 Claude Code 在裸子 shell 里调的，PATH 和 venv 都不可靠。
   `install` 把垫片的**绝对路径**写进 `~/.claude/settings.json`，用系统 `python3` 调，什么环境都能起；
   垫片只做一件事，把自己所在目录放进 `sys.path`，所以不装也能跑。pip 装过的话退回用解释器绝对路径调模块入口。
-- **为什么"任务完成"有 60 秒阈值。** Stop 在每一轮结束都触发，包括三秒钟的问答；不设阈值就是刷屏。
-  这个值的含义是"多久算你可能已经走开了"，所以宁可高不宜低。
+- **为什么"任务完成"有 60 秒阈值，又为什么它会被绕过。** Stop 在每一轮结束都触发，包括三秒钟的问答；
+  不设阈值就是刷屏。这个值真正要回答的是"多久算你可能已经走开了" —— 但那是拿耗时去**猜**。
+  macOS 能直接测：`away_after_seconds`（默认 120）内没碰过键鼠，就当你不在电脑前，这时阈值不再适用，
+  再短的一轮也推。在手机上驱动会话时没有终端可看，54 秒的回答一样重要；坐在 Mac 前时阈值照旧挡刷屏。
 - **为什么「任务完成」默认不带正文。** 这个工具只要回答一句话：哪个会话做完了。正文搬过来会占掉半屏，
   真正有用的是那一行 `🛠 Bash×20 Edit×7 · config.py telegram.py`，扫一眼就知道这轮干了什么。
   想看全文把 `message_style` 改成 `collapsed`（折叠，点开展开）或 `full`。
@@ -58,7 +60,7 @@ cd claude-tg-notify
 |---|---|
 | `claude-tg-notify` | 命令行与 hook 入口垫片，免安装直跑 |
 | `claude_tg_notify/` | 包：`config` 路径与配置、`state` 会话状态与节流、`telegram` API 与文案、`approval` 远程批准、`handlers` 事件分发、`install` 写 settings.json、`cli` 命令行 |
-| `tests/` | 135 条离线测试：假 Telegram 跑通全部路径，加入口子进程测试与包结构静态约束。`python3 -m unittest discover -s tests` |
+| `tests/` | 140 条离线测试：假 Telegram 跑通全部路径，加入口子进程测试与包结构静态约束。`python3 -m unittest discover -s tests` |
 | `config.example.json` | 配置项全集与默认值，真实配置在 `~/.config/claude-tg-notify/config.json` |
 | `docs/guide/` | 常青规范：架构与数据流、配置项、用到的 Claude Code hook 契约 |
 | `docs/ops/` | 踩坑记录 |

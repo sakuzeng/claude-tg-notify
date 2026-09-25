@@ -138,6 +138,43 @@ class StopTests(BaseCase):
         self.assertNotIn("已修复 &amp; 测试通过", text)
 
 
+class AwayTests(BaseCase):
+    """人不在 Mac 前时，短轮也要推 —— 阈值只用来挡"你就坐在电脑前"的刷屏。"""
+
+    def short_turn(self, idle, **cfg_over):
+        cfg = config.load_config()
+        cfg["min_turn_seconds"] = 60          # BaseCase 默认 30，这组用例要的是 54 < 60
+        cfg.update(cfg_over)
+        config.save_config(cfg)
+        handlers.run_hook(payload("UserPromptSubmit", message="接下来怎么做呢"))
+        self.started_seconds_ago(54)
+        with mock.patch.object(config, "mac_idle_seconds", return_value=idle):
+            handlers.run_hook(payload("Stop", last_assistant_message="整体做法和网上主流一致"))
+        return self.tg.sent()
+
+    def test_short_turn_sent_when_away(self):
+        """2026-09-25 的现场：54 秒的回答，人在手机上。"""
+        sent = self.short_turn(idle=600.0, away_after_seconds=120)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("54 秒", sent[0]["text"])
+
+    def test_short_turn_still_skipped_when_at_the_mac(self):
+        self.assertEqual(self.short_turn(idle=5.0, away_after_seconds=120), [])
+
+    def test_feature_off_by_zero(self):
+        self.assertEqual(self.short_turn(idle=600.0, away_after_seconds=0), [])
+
+    def test_unknown_idle_keeps_the_threshold(self):
+        """非 macOS 探测不到空闲时间，必须沿用阈值，不能突然开始刷屏。"""
+        self.assertEqual(self.short_turn(idle=None, away_after_seconds=120), [])
+
+    def test_away_does_not_override_the_event_switch(self):
+        cfg = config.load_config()
+        cfg["events"]["stop"] = False
+        config.save_config(cfg)
+        self.assertEqual(self.short_turn(idle=600.0, away_after_seconds=120), [])
+
+
 class StopStyleTests(BaseCase):
     """message_style 三档 + 做了什么那一行。"""
 

@@ -1,5 +1,6 @@
 """Codex 四类 hook 的离线端到端测试。"""
 
+import html
 import sys
 import unittest
 from pathlib import Path
@@ -99,6 +100,32 @@ class CodexHookTests(BaseCase):
             self.started_seconds_ago(60)
             self.stop(turn_id=style, body="正文 <b>")
             self.assertIn(expected, self.tg.sent()[-1]["text"])
+
+    def test_long_collapsed_body_with_multiple_tool_calls(self):
+        cfg = config.load_config()
+        cfg["message_style"] = "collapsed"
+        cfg["max_text_chars"] = 700
+        config.save_config(cfg)
+        self.prompt("长内容与工具活动验收")
+        self.tool(name="Bash", command="python3 -m unittest discover -s tests -q", call_id="bash-1")
+        self.tool(name="Bash", command="git diff --check", call_id="bash-2")
+        self.tool(name="apply_patch", call_id="patch-1", command=(
+            "*** Begin Patch\n*** Update File: /tmp/handlers.py\n"
+            "*** Update File: /tmp/telegram.py\n*** End Patch"))
+        self.started_seconds_ago(75)
+        self.stop(body="<验收>" + "这是一段较长的完成说明。" * 100)
+
+        self.assertEqual(len(self.tg.sent()), 1)
+        message = self.tg.sent()[0]["text"]
+        self.assertIn("🛠 Bash×2 apply_patch", message)
+        self.assertIn("<code>handlers.py telegram.py</code>", message)
+        body = html.unescape(message.split("<blockquote expandable>", 1)[1]
+                             .split("</blockquote>", 1)[0])
+        self.assertEqual(len(body), 700)
+        self.assertTrue(body.startswith("<验收>"))
+        self.assertTrue(body.endswith("…"))
+        self.assertNotIn("python3 -m unittest", message)
+        self.assertFalse(state.activity_path(SID, TURN).exists())
 
     def test_duplicate_stop_and_mismatched_turn_do_not_send(self):
         self.prompt()

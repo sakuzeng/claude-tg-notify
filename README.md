@@ -20,10 +20,10 @@ Codex 目前没有本项目原先使用的 Claude `Notification` 与 `Permission
 ```bash
 ./codex-tg-notify setup      # 配置 Telegram bot；成功时会发送一条连接测试消息
 ./codex-tg-notify install    # 备份并合并到 ~/.codex/hooks.json，保留其他 hook
-./codex-tg-notify status     # 检查四条 hook、配置与最近日志
+./codex-tg-notify status     # 检查 hook 是否写入、配置与最近日志；不代表已获信任
 ```
 
-首次启用或修改 hook 后，在 **Codex CLI** 中执行 `/hooks`，审查并信任这些 hook；已有会话建议重启。Codex 会跳过尚未信任的 hook。[官方信任说明](https://learn.chatgpt.com/docs/hooks)
+首次启用或修改 hook 后，在 **Codex CLI** 中执行 `/hooks`，逐条审查并信任本项目的 `UserPromptSubmit`、`PostToolUse`、`Stop` 命令；已有会话建议重启。暂不使用远程批准时，可让 `PermissionRequest` 保持未信任。若列表还有其他来源的 hook，不要直接选择“全部信任”。Codex 会跳过尚未信任的 hook。[官方信任说明](https://learn.chatgpt.com/docs/hooks)
 
 已在旧版 `~/.config/claude-tg-notify/config.json` 配好 bot 的用户，新版在没有新配置时会只读沿用它。重新执行 `setup` 后，配置写入 `~/.config/codex-tg-notify/config.json`。不会修改 Claude 的 `~/.claude/settings.json`。
 

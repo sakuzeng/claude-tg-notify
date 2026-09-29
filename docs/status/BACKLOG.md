@@ -1,6 +1,6 @@
 # 待验收
 
-1. 在 Codex CLI `/hooks` 中审查并信任四条新 hook；执行一轮超过 `min_turn_seconds` 的任务，核对 Telegram 完成通知及 `~/.cache/codex-tg-notify/notify.log`。
+1. 在 Codex CLI `/hooks` 中审查并信任本项目的 `UserPromptSubmit`、`PostToolUse`、`Stop` hook；执行一轮超过 `min_turn_seconds` 的任务，核对 Telegram 完成通知及 `~/.cache/codex-tg-notify/notify.log`。`PermissionRequest` 暂缓。
 2. 运行 `./codex-tg-notify test --approve` 并在手机上点“允许一次”和“拒绝”，确认终端打印对应的 Codex `PermissionRequest` 决定。
 3. 在真实 Codex 会话中触发需要批准的命令，手机点按钮，确认 Codex 执行或拒绝与点击一致。Mac 活跃时先把 `approve.skip_if_mac_active_seconds` 设为 0。
 

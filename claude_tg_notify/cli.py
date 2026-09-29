@@ -135,8 +135,9 @@ def cmd_status(args: argparse.Namespace) -> int:
         ", ".join(config.allowed_user_ids(cfg)) or "(无！群聊需设置 allowed_user_ids)"))
 
     inst = install.hooks_installed(config.SETTINGS_PATH)
-    print("hooks     : %s" % ", ".join("%s=%s" % (k, "✓" if v else "✗") for k, v in inst.items()))
+    print("hooks 配置: %s" % ", ".join("%s=%s" % (k, "已写入" if v else "缺失") for k, v in inst.items()))
     print("            (%s)" % config.SETTINGS_PATH)
+    print("            是否生效请在 Codex CLI 输入 /hooks 查看；未信任的 hook 不会运行")
     warning = install.stale_timeout_warning(cfg, config.SETTINGS_PATH)
     if warning:
         print(warning)

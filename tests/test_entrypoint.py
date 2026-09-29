@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from helpers import ROOT, BaseCase, child_env, config, state  # noqa: E402
 
-SHIM = ROOT / "claude-tg-notify"
+SHIM = ROOT / "codex-tg-notify"
 
 
 def run(args, stdin="", env=None):
@@ -24,7 +24,7 @@ def run(args, stdin="", env=None):
 class ShimTests(BaseCase):
     def test_shim_exists_and_is_executable(self):
         self.assertTrue(SHIM.exists())
-        self.assertTrue(SHIM.stat().st_mode & 0o111, "垫片需要可执行位，README 里是 ./claude-tg-notify")
+        self.assertTrue(SHIM.stat().st_mode & 0o111, "垫片需要可执行位，README 里是 ./codex-tg-notify")
 
     def test_version(self):
         from claude_tg_notify import VERSION
@@ -44,7 +44,7 @@ class ShimTests(BaseCase):
     def test_hook_writes_state_and_stays_silent(self):
         sid = "entrypoint-test-1"
         payload = json.dumps({"session_id": sid, "cwd": "/tmp/p",
-                              "hook_event_name": "UserPromptSubmit", "message": "hello"})
+                              "hook_event_name": "UserPromptSubmit", "turn_id": "turn-1", "prompt": "hello"})
         proc = run(["hook"], stdin=payload)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stdout, "", "非 PermissionRequest 事件绝不能往 stdout 写东西")
@@ -67,12 +67,11 @@ class ShimTests(BaseCase):
         proc = run(["install", "--print"])
         self.assertEqual(proc.returncode, 0, proc.stderr)
         hooks = json.loads(proc.stdout)["hooks"]
-        self.assertEqual(set(hooks), {"UserPromptSubmit", "Stop", "Notification",
-                                      "PermissionRequest", "PermissionDenied"})
+        self.assertEqual(set(hooks), {"UserPromptSubmit", "PostToolUse", "Stop", "PermissionRequest"})
         for entries in hooks.values():
             for entry in entries:
                 for h in entry["hooks"]:
-                    self.assertIn("claude", h["command"])
+                    self.assertIn("codex-tg-notify", h["command"])
 
 
 class ModuleEntryTests(BaseCase):

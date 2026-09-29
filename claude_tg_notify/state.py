@@ -9,8 +9,11 @@
 """
 
 import json
+import os
 import re
 import time
+import uuid
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from . import config
@@ -31,9 +34,59 @@ def load_state(session_id: str) -> Dict[str, Any]:
 def save_state(session_id: str, state: Dict[str, Any]) -> None:
     """先写临时文件再 replace，同会话的并发 hook 不会读到半截文件。"""
     config.SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = state_path(session_id).with_suffix(".tmp")
+    tmp = state_path(session_id).with_name(state_path(session_id).name + "." + uuid.uuid4().hex + ".tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    tmp.chmod(0o600)
     tmp.replace(state_path(session_id))
+
+
+def activity_path(session_id: str, turn_id: str) -> Path:
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", session_id + "-" + turn_id)
+    return config.ACTIVITY_DIR / (safe + ".jsonl")
+
+
+def record_tool(data: Dict[str, Any]) -> None:
+    """PostToolUse 只记工具名与文件名，不保存命令正文或工具结果。"""
+    sid = str(data.get("session_id") or "")
+    turn_id = str(data.get("turn_id") or "")
+    if not sid or not turn_id:
+        return
+    name = str(data.get("tool_name") or "?")
+    inp = data.get("tool_input") if isinstance(data.get("tool_input"), dict) else {}
+    files = []
+    if name == "apply_patch":
+        for match in re.finditer(r"^\*\*\* (?:Add|Update|Delete|Move to) File: (.+)$",
+                                 str(inp.get("command") or ""), re.MULTILINE):
+            files.append(Path(match.group(1)).name)
+    elif name in ("Edit", "Write", "MultiEdit", "NotebookEdit") and inp.get("file_path"):
+        files.append(Path(str(inp["file_path"])).name)
+    item = {"name": name, "id": str(data.get("tool_use_id") or ""), "files": files[:5]}
+    try:
+        config.ACTIVITY_DIR.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(activity_path(sid, turn_id)), os.O_CREAT | os.O_WRONLY | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, (json.dumps(item, ensure_ascii=False) + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
+    except Exception as exc:
+        config.log("activity write failed: %s" % exc)
+
+
+def read_tools(session_id: str, turn_id: str) -> "list[Dict[str, Any]]":
+    if not session_id or not turn_id:
+        return []
+    try:
+        path = activity_path(session_id, turn_id)
+        if path.stat().st_size > 2_000_000:
+            return []
+        result = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        path.unlink()
+        return result
+    except FileNotFoundError:
+        return []
+    except Exception as exc:
+        config.log("activity read failed: %s" % exc)
+        return []
 
 
 # ---------------------------------------------------------------------------

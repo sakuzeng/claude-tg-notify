@@ -17,9 +17,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 TMP = Path(tempfile.mkdtemp(prefix="ctn-test-"))
-os.environ["CLAUDE_TG_NOTIFY_CONFIG_DIR"] = str(TMP / "config")
-os.environ["CLAUDE_TG_NOTIFY_STATE_DIR"] = str(TMP / "state")
-os.environ["CLAUDE_CONFIG_DIR"] = str(TMP / "claude")
+os.environ["CODEX_TG_NOTIFY_CONFIG_DIR"] = str(TMP / "config")
+os.environ["CODEX_TG_NOTIFY_STATE_DIR"] = str(TMP / "state")
+os.environ["CODEX_HOME"] = str(TMP / "codex")
 
 from claude_tg_notify import approval, cli, config, handlers, install, state, telegram  # noqa: E402
 
@@ -105,7 +105,7 @@ class BaseCase(unittest.TestCase):
         self.reset_state()
 
     def reset_state(self):
-        for d in (config.SESSIONS_DIR, config.INBOX_DIR):
+        for d in (config.SESSIONS_DIR, config.INBOX_DIR, config.ACTIVITY_DIR):
             if d.exists():
                 for f in d.glob("*"):
                     f.unlink()

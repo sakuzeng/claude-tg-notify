@@ -13,12 +13,7 @@
   "separator": "━━━━━━━━━━━━━━",
   "gap_lines": 1,
   "events": {
-    "stop": true,
-    "permission_prompt": true,
-    "elicitation_dialog": true,
-    "agent_needs_input": true,
-    "idle_prompt": false,
-    "permission_denied": false
+    "stop": true
   },
   "silent": {
     "stop": false

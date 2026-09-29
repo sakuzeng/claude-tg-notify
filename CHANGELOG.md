@@ -1,5 +1,13 @@
 # 变更记录
 
+## 1.0.0 — 2026-09-29
+
+- 改为 Codex Telegram 通知：从 `~/.codex/hooks.json` 接入 `UserPromptSubmit`、`PostToolUse`、`Stop`、`PermissionRequest`，保留其他 hook 并清理本项目旧条目。
+- 新命令 `codex-tg-notify`；新配置与状态目录使用 `codex-tg-notify`，新配置不存在时只读沿用旧 bot 配置。
+- 完成通知使用 Codex `turn_id` 去重，工具活动来自 `PostToolUse`，不再依赖 Claude transcript。
+- 远程批准只支持“允许一次 / 拒绝”。移除 Codex 不支持的“始终允许”输出和 Claude 专属通知事件。
+- 更新离线测试和文档；真实 Codex hook 与 Telegram 按钮仍需在目标机器验收。
+
 ## 0.5.0 — 2026-09-25
 
 - **人不在 Mac 前时，`min_turn_seconds` 不再适用**（`away_after_seconds`，默认 120 秒）。

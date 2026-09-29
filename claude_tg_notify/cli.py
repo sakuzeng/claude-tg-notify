@@ -1,6 +1,6 @@
 """命令行门面：解析参数、调用各模块、把结果打印给人看。
 
-只有本模块与 __main__ 允许 print —— 其余模块的 stdout 会被 Claude Code 当作数据。
+只有本模块与 __main__ 允许 print —— 其余模块的 stdout 会被 Codex 当作数据。
 """
 
 import argparse
@@ -51,10 +51,10 @@ def cmd_setup(args: argparse.Namespace) -> int:
               "（允许点按钮的 Telegram 用户 id）才会启用。")
 
     ok = telegram.send_message(
-        cfg, "✅ <b>claude-tg-notify 已连接</b>\n之后 Claude Code 的任务完成 / 需要确认会推到这里。") is not None
+        cfg, "✅ <b>codex-tg-notify 已连接</b>\n之后 Codex 的任务完成 / 需要批准会推到这里。") is not None
     print("测试消息：%s" % ("已发送，看手机" if ok else "发送失败，查看 %s" % config.LOG_PATH))
     if not all(install.hooks_installed(config.SETTINGS_PATH).values()):
-        print("下一步：claude-tg-notify install")
+        print("下一步：codex-tg-notify install")
     return 0 if ok else 1
 
 
@@ -99,13 +99,11 @@ def cmd_test(args: argparse.Namespace) -> int:
         fake = {
             "session_id": "test-approve", "cwd": os.getcwd(), "hook_event_name": "PermissionRequest",
             "tool_name": "Bash", "tool_input": {"command": "echo '这是一次远程批准演练'"},
-            "permission_suggestions": [{"type": "addRules", "behavior": "allow", "destination": "session",
-                                        "rules": [{"toolName": "Bash", "ruleContent": "echo *"}]}],
         }
         cfg["approve"]["skip_if_mac_active_seconds"] = 0   # 演练时人就在电脑前，别让位
         print("已发送带按钮的消息，在手机上点一下（最多等 %ss）…" % cfg["approve"].get("wait_seconds"))
         out = approval.handle_permission_request(cfg, fake)
-        print("结果：%s" % (json.dumps(out, ensure_ascii=False) if out else "未响应/交回终端"))
+        print("结果：%s" % (json.dumps(out, ensure_ascii=False) if out else "未响应/交回 Codex"))
         return 0
 
     text = args.text or "🧪 <b>测试消息</b>\n来自 %s，%s" % (APP, time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -123,14 +121,15 @@ def cmd_status(args: argparse.Namespace) -> int:
     print("%s %s" % (APP, VERSION))
     print("包路径    : %s" % Path(__file__).resolve().parent)
     print("hook 命令 : %s" % install.hook_command())
-    print("配置文件  : %s%s" % (config.CONFIG_PATH, "" if config.CONFIG_PATH.exists() else "  (不存在)"))
+    print("配置文件  : %s%s" % (config.effective_config_path(),
+                                  "" if config.effective_config_path().exists() else "  (不存在)"))
     print("bot token : %s" % masked)
     print("chat id   : %s" % (cfg.get("chat_id") or "(未设置)"))
     print("proxy     : %s" % (cfg.get("proxy") or "(直连)"))
     print("阈值      : 任务耗时 ≥ %ss 才推送；同类通知间隔 ≥ %ss；Mac 活跃跳过 = %ss" % (
         cfg.get("min_turn_seconds"), cfg.get("min_interval_seconds"), cfg.get("skip_if_mac_active_seconds")))
     print("事件      : %s" % ", ".join("%s=%s" % (k, "on" if v else "off") for k, v in cfg["events"].items()))
-    print("远程批准  : %s；等待 %ss；Mac %ss 内活跃则交回终端；可操作用户 %s" % (
+    print("远程批准  : %s；等待 %ss；Mac %ss 内活跃则交回 Codex；可操作用户 %s" % (
         "on" if ap.get("enabled", True) else "off", ap.get("wait_seconds"),
         ap.get("skip_if_mac_active_seconds"),
         ", ".join(config.allowed_user_ids(cfg)) or "(无！群聊需设置 allowed_user_ids)"))
@@ -158,24 +157,24 @@ def cmd_install(args: argparse.Namespace) -> int:
     except json.JSONDecodeError as exc:
         print("%s 不是合法 JSON，先修好它：%s" % (config.SETTINGS_PATH, exc), file=sys.stderr)
         return 1
-    print("hooks 已写入 %s" % config.SETTINGS_PATH)
+    print("hooks 已就绪：%s" % config.SETTINGS_PATH)
     print("hook 命令 : %s" % install.hook_command())
     if backup:
         print("备份     : %s" % backup)
-    print("正在运行的 Claude Code 会话需要重启（或在里面执行一次 /hooks）才会加载新 hook。")
+    print("在 Codex CLI 中运行 /hooks，审查并信任新 hook；已有会话建议重启后验收。")
     return 0
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
     backup = install.uninstall_hooks(config.SETTINGS_PATH)
-    print("已移除 hooks" if backup else "settings.json 里没有本工具的 hooks")
+    print("已移除 hooks" if backup else "hooks.json 里没有本工具的 hooks")
     if backup:
         print("备份     : %s" % backup)
     return 0
 
 
 def cmd_hook(args: argparse.Namespace) -> int:
-    """Claude Code 调用的入口。任何异常都吞掉并返回 0，绝不打断会话。"""
+    """Codex 调用的入口。任何异常都吞掉并返回 0，绝不打断会话。"""
     try:
         out = handlers.run_hook(sys.stdin.read())
         if out:
@@ -188,7 +187,7 @@ def cmd_hook(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog=APP, description="把 Claude Code 的会话事件推到 Telegram，并可在 Telegram 上批准工具调用。")
+        prog=APP, description="把 Codex 的会话事件推到 Telegram，并可在 Telegram 上批准工具调用。")
     parser.add_argument("--version", action="version", version="%s %s" % (APP, VERSION))
     sub = parser.add_subparsers(dest="cmd")
 
@@ -205,12 +204,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status", help="查看配置与 hook 状态").set_defaults(func=cmd_status)
 
-    p = sub.add_parser("install", help="把 hooks 写进 ~/.claude/settings.json")
+    p = sub.add_parser("install", help="把 hooks 写进 ~/.codex/hooks.json")
     p.add_argument("--print", dest="print_only", action="store_true", help="只打印 JSON，不写文件")
     p.set_defaults(func=cmd_install)
 
-    sub.add_parser("uninstall", help="从 settings.json 移除 hooks").set_defaults(func=cmd_uninstall)
-    sub.add_parser("hook", help="hook 入口（Claude Code 调用）").set_defaults(func=cmd_hook)
+    sub.add_parser("uninstall", help="从 hooks.json 移除 hooks").set_defaults(func=cmd_uninstall)
+    sub.add_parser("hook", help="hook 入口（Codex 调用）").set_defaults(func=cmd_hook)
     return parser
 
 

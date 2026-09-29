@@ -9,7 +9,6 @@ import json
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,8 +19,6 @@ API_ROOT = "https://api.telegram.org"
 #: 盲文空白。Telegram 会裁掉消息首尾的普通空白，但不认它是空白，所以能撑出真正的空行。
 BLANK_LINE = "⠀"
 
-#: 会改动磁盘的工具，它们的 file_path 才值得放进"做了什么"那一行。
-MUTATING_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 ACTIVITY_MAX_TOOLS = 4
 ACTIVITY_MAX_FILES = 3
 
@@ -67,103 +64,37 @@ def tool_summary(tool_name: str, tool_input: Any) -> str:
     return "<b>%s</b>\n<pre>%s</pre>" % (name, html.escape(body)) if body else "<b>%s</b>" % name
 
 
-def session_title(transcript_path: Optional[str]) -> Optional[str]:
-    """transcript 里最后一条 custom-title 记录，没有就 None。"""
-    if not transcript_path:
-        return None
-    try:
-        path = Path(transcript_path)
-        if not path.exists() or path.stat().st_size > 200_000_000:
-            return None
-        title = None
-        with path.open("r", encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                if '"custom-title"' not in line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except Exception:
-                    continue
-                if rec.get("type") == "custom-title" and rec.get("customTitle"):
-                    title = str(rec["customTitle"])
-        return title
-    except Exception:
-        return None
-
-
-def _parse_ts(value: Any) -> Optional[float]:
-    """transcript 里的 ISO8601（UTC，末尾 Z）转 epoch 秒；解析不了返回 None。"""
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        return datetime.fromisoformat(value.strip().replace("Z", "+00:00")).timestamp()
-    except ValueError:
-        return None
-
-
-def turn_activity(transcript_path: Optional[str], since: float) -> str:
-    """本轮用过哪些工具、动过哪些文件，压成一行。
-
-    纯粹读 transcript 文件里已有的 tool_use 记录并计数，**不经过模型，不产生 token**。
-    拿不到或这一轮没调过工具时返回空串，调用方据此决定是否加这一行。
-    """
-    if not transcript_path:
-        return ""
-    try:
-        path = Path(transcript_path)
-        if not path.exists() or path.stat().st_size > 200_000_000:
-            return ""
-    except Exception:
-        return ""
-
+def codex_turn_activity(items: List[Dict[str, Any]]) -> str:
+    """根据 PostToolUse 本地记录汇总本轮工具；不依赖 Codex transcript。"""
     counts: Dict[str, int] = {}
     files: List[str] = []
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                # 先做廉价的子串判断，绝大多数行不用解析 JSON。
-                if '"tool_use"' not in line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except Exception:
-                    continue
-                if rec.get("type") != "assistant":
-                    continue
-                ts = _parse_ts(rec.get("timestamp"))
-                if ts is None or ts < since:
-                    continue
-                message = rec.get("message")
-                items = message.get("content") if isinstance(message, dict) else None
-                for item in items or []:
-                    if not isinstance(item, dict) or item.get("type") != "tool_use":
-                        continue
-                    name = str(item.get("name") or "?")
-                    counts[name] = counts.get(name, 0) + 1
-                    if name in MUTATING_TOOLS:
-                        inp = item.get("input") if isinstance(item.get("input"), dict) else {}
-                        base = Path(str(inp.get("file_path") or inp.get("notebook_path") or "")).name
-                        if base and base not in files:
-                            files.append(base)
-    except Exception as exc:
-        config.log("activity scan failed: %s" % exc)
-        return ""
-
+    seen = set()
+    for item in items:
+        name = str(item.get("name") or "?")
+        call_id = str(item.get("id") or "")
+        if call_id and call_id in seen:
+            continue
+        if call_id:
+            seen.add(call_id)
+        counts[name] = counts.get(name, 0) + 1
+        for file_name in item.get("files") or []:
+            base = Path(str(file_name)).name
+            if base and base not in files:
+                files.append(base)
     if not counts:
         return ""
     ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-    shown = ["%s×%d" % (n, c) if c > 1 else n for n, c in ranked[:ACTIVITY_MAX_TOOLS]]
+    shown = ["%s×%d" % (name, count) if count > 1 else name
+             for name, count in ranked[:ACTIVITY_MAX_TOOLS]]
     if len(ranked) > ACTIVITY_MAX_TOOLS:
         shown.append("+%d" % (len(ranked) - ACTIVITY_MAX_TOOLS))
     line = html.escape("🛠 " + " ".join(shown))
-    if not files:
-        return line
-    names = files[:ACTIVITY_MAX_FILES]
-    if len(files) > ACTIVITY_MAX_FILES:
-        names = names + ["+%d" % (len(files) - ACTIVITY_MAX_FILES)]
-    # 裸文件名会被 Telegram 当网址自动加链接（.md 是摩尔多瓦、.py 是巴拉圭的顶级域名），
-    # 点一下跳浏览器。包进 <code> 就不再检测，顺带得到一块浅底，花纹壁纸上也更好认。
-    return line + " · <code>%s</code>" % html.escape(" ".join(names))
+    if files:
+        names = files[:ACTIVITY_MAX_FILES]
+        if len(files) > ACTIVITY_MAX_FILES:
+            names.append("+%d" % (len(files) - ACTIVITY_MAX_FILES))
+        line += " · <code>%s</code>" % html.escape(" ".join(names))
+    return line
 
 
 def decorate(cfg: Dict[str, Any], text: str) -> str:
@@ -186,7 +117,7 @@ def decorate(cfg: Dict[str, Any], text: str) -> str:
 
 def describe_session(data: Dict[str, Any], state: Dict[str, Any]) -> str:
     """每条消息开头的两行：会话标题与项目名。"""
-    title = session_title(data.get("transcript_path")) or state.get("first_prompt") or ""
+    title = state.get("first_prompt") or ""
     project = Path(data.get("cwd") or state.get("cwd") or "").name or "?"
     short_id = (data.get("session_id") or "")[:8]
     line = "<b>会话</b>：%s" % html.escape(truncate(title, 80)) if title else "<b>会话</b>：(未命名)"

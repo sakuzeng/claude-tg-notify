@@ -10,15 +10,12 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from helpers import SID, USER_ID, BaseCase, approval, config, handlers, payload, state  # noqa: E402
+from helpers import USER_ID, BaseCase, approval, config, handlers, payload  # noqa: E402
 
 
 class ApprovalCase(BaseCase):
     def request(self, **kw):
-        base = dict(tool_name="Bash", tool_input={"command": "npm test"},
-                    permission_suggestions=[{
-                        "type": "addRules", "behavior": "allow", "destination": "session",
-                        "rules": [{"toolName": "Bash", "ruleContent": "npm test"}]}])
+        base = dict(tool_name="Bash", tool_input={"command": "npm test"}, turn_id="turn-1")
         base.update(kw)
         return payload("PermissionRequest", **base)
 
@@ -61,27 +58,12 @@ class DecisionTests(ApprovalCase):
 
         sent = self.tg.sent()[0]
         self.assertIn("npm test", sent["text"])
-        self.assertEqual(len(sent["reply_markup"]["inline_keyboard"]), 2)
+        self.assertEqual(len(sent["reply_markup"]["inline_keyboard"]), 1)
         self.assertIn("已允许", self.tg.edits()[-1]["text"])
         self.assertEqual(self.tg.edits()[-1]["reply_markup"], {"inline_keyboard": []})
         self.assertEqual(self.tg.answers()[0]["text"], "已允许")
         self.assertFalse(config.POLL_LOCK.exists())
         self.assertEqual(approval.read_offset(), 8)
-
-    def test_allow_always_echoes_session_suggestion(self):
-        self.tap_on_first_poll("s")
-        out = handlers.run_hook(self.request())
-        decision = out["hookSpecificOutput"]["decision"]
-        self.assertEqual(decision["behavior"], "allow")
-        self.assertEqual(decision["updatedPermissions"][0]["destination"], "session")
-        self.assertIn("不再询问", self.tg.edits()[-1]["text"])
-
-    def test_allow_always_falls_back_to_first_suggestion(self):
-        self.tap_on_first_poll("s")
-        out = handlers.run_hook(self.request(permission_suggestions=[
-            {"type": "addRules", "behavior": "allow", "destination": "localSettings", "rules": []}]))
-        self.assertEqual(out["hookSpecificOutput"]["decision"]["updatedPermissions"][0]["destination"],
-                         "localSettings")
 
     def test_deny(self):
         self.tap_on_first_poll("d")
@@ -91,15 +73,15 @@ class DecisionTests(ApprovalCase):
         self.assertIn("message", decision)
         self.assertIn("已拒绝", self.tg.edits()[-1]["text"])
 
-    def test_no_suggestions_means_no_always_button(self):
+    def test_always_button_is_never_offered(self):
         self.tap_on_first_poll("a")
-        handlers.run_hook(self.request(permission_suggestions=[]))
+        handlers.run_hook(self.request())
         self.assertEqual(len(self.tg.sent()[0]["reply_markup"]["inline_keyboard"]), 1)
 
-    def test_always_without_suggestions_degrades_to_allow_once(self):
-        self.tap_on_first_poll("s")
-        out = handlers.run_hook(self.request(permission_suggestions=[]))
-        self.assertEqual(out["hookSpecificOutput"]["decision"], {"behavior": "allow"})
+    def test_unsupported_choice_is_rejected(self):
+        self.queue_tap("s", req="abc123abc123")
+        approval.poll_callbacks_once(config.load_config())
+        self.assertIsNone(approval.read_inbox("abc123abc123"))
 
 
 class FallThroughTests(ApprovalCase):
@@ -142,12 +124,6 @@ class FallThroughTests(ApprovalCase):
     def test_send_failure_falls_through(self):
         self.tg_mock.side_effect = RuntimeError("boom")
         self.assertIsNone(handlers.run_hook(self.request()))
-
-    def test_plain_notification_suppressed_after_button_message(self):
-        self.tap_on_first_poll("a")
-        handlers.run_hook(self.request())
-        handlers.run_hook(payload("Notification", notification_type="permission_prompt", message="需要权限"))
-        self.assertEqual(len(self.tg.sent()), 1)
 
 
 class PollingTests(ApprovalCase):
@@ -219,13 +195,6 @@ class LockTests(ApprovalCase):
         found = approval.wait_for_decision(config.load_config(), "req9", time.time() + 5, False)
         self.assertEqual(found["choice"], "a")
         self.assertEqual(self.tg.by("getUpdates"), [])
-
-
-class StateTests(ApprovalCase):
-    def test_perm_handled_until_recorded(self):
-        self.tap_on_first_poll("a")
-        handlers.run_hook(self.request())
-        self.assertGreater(state.load_state(SID)["perm_handled_until"], time.time())
 
 
 if __name__ == "__main__":

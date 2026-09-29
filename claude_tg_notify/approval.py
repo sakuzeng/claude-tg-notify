@@ -8,15 +8,16 @@
 import html
 import json
 import os
+import re
 import time
 import uuid
 from typing import Any, Dict, Optional
 
 from . import config, state, telegram
 
-#: callback_data 形如 "p:<请求 id>:<a|s|d>"，分别是允许一次 / 始终允许 / 拒绝。
+#: callback_data 形如 "p:<请求 id>:<a|d>"，分别是允许一次 / 拒绝。
 CALLBACK_PREFIX = "p"
-CHOICE_LABELS = {"a": "已允许", "s": "已允许（始终）", "d": "已拒绝"}
+CHOICE_LABELS = {"a": "已允许", "d": "已拒绝"}
 
 #: 锁多久没更新算陈旧（持锁的 hook 被杀掉时）。
 LOCK_STALE_SECONDS = 45
@@ -62,12 +63,20 @@ def read_inbox(req: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def write_inbox(req: str, decision: Dict[str, Any]) -> None:
+def write_inbox(req: str, decision: Dict[str, Any]) -> bool:
     try:
         config.INBOX_DIR.mkdir(parents=True, exist_ok=True)
-        inbox_path(req).write_text(json.dumps(decision), encoding="utf-8")
+        fd = os.open(str(inbox_path(req)), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(fd, json.dumps(decision).encode("utf-8"))
+        finally:
+            os.close(fd)
+        return True
+    except FileExistsError:
+        return True
     except Exception as exc:
         config.log("inbox write failed: %s" % exc)
+        return False
 
 
 def sweep_inbox(max_age: float = INBOX_STALE_SECONDS) -> None:
@@ -125,29 +134,33 @@ def poll_callbacks_once(cfg: Dict[str, Any], long_poll: int = 3) -> None:
     allowed = config.allowed_user_ids(cfg)
     sweep_inbox()
     for upd in updates:
-        write_offset(int(upd.get("update_id", 0)) + 1)
+        next_offset = int(upd.get("update_id", 0)) + 1
         cq = upd.get("callback_query") or {}
         parts = str(cq.get("data") or "").split(":")
-        if len(parts) != 3 or parts[0] != CALLBACK_PREFIX:
+        if (len(parts) != 3 or parts[0] != CALLBACK_PREFIX
+                or not re.fullmatch(r"[0-9a-f]{12}", parts[1])):
+            write_offset(next_offset)
             continue
         _, req, choice = parts
         sender = cq.get("from") or {}
         sender_id = str(sender.get("id", ""))
         answer: Dict[str, Any] = {"callback_query_id": cq.get("id")}
-        if sender_id not in allowed:
+        if sender_id not in allowed or choice not in CHOICE_LABELS:
             answer["text"] = "无权操作"
-            config.log("rejected callback from user %s" % sender_id)
+            config.log("rejected callback from user %s (%s)" % (sender_id, choice))
         else:
             answer["text"] = CHOICE_LABELS.get(choice, "收到")
-            write_inbox(req, {
+            if not write_inbox(req, {
                 "choice": choice,
                 "from": sender.get("username") or sender.get("first_name") or sender_id,
                 "at": time.time(),
-            })
+            }):
+                break
         try:
             telegram.tg_api(cfg, "answerCallbackQuery", answer, timeout=10)
         except Exception as exc:
             config.log("answerCallbackQuery failed: %s" % exc)
+        write_offset(next_offset)
 
 
 def wait_for_decision(cfg: Dict[str, Any], req: str, deadline: float,
@@ -179,18 +192,16 @@ def wait_for_decision(cfg: Dict[str, Any], req: str, deadline: float,
 # hook 入口
 # ---------------------------------------------------------------------------
 
-def build_keyboard(req: str, has_suggestions: bool) -> Dict[str, Any]:
+def build_keyboard(req: str) -> Dict[str, Any]:
     rows = [[{"text": "✅ 允许一次", "callback_data": "%s:%s:a" % (CALLBACK_PREFIX, req)},
              {"text": "⛔ 拒绝", "callback_data": "%s:%s:d" % (CALLBACK_PREFIX, req)}]]
-    if has_suggestions:
-        rows.append([{"text": "✅ 始终允许（不再询问）", "callback_data": "%s:%s:s" % (CALLBACK_PREFIX, req)}])
     return {"inline_keyboard": rows}
 
 
 def handle_permission_request(cfg: Dict[str, Any], data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """发带按钮的消息并等决定。
 
-    返回 hook 输出（decision），或 None 表示交回 Claude Code 的正常权限提示。
+    返回 hook 输出（decision），或 None 表示交回 Codex 的正常批准提示。
     """
     approve = cfg.get("approve") or {}
     if not approve.get("enabled", True) or data.get("agent_id"):
@@ -199,12 +210,12 @@ def handle_permission_request(cfg: Dict[str, Any], data: Dict[str, Any]) -> Opti
     sid = data.get("session_id", "")
     st = state.load_state(sid)
 
-    # 人就在 Mac 前：同步 hook 会挡住终端提示，直接让位。
+    # 人就在 Mac 前：同步 hook 会挡住 Codex 提示，直接让位。
     skip_active = float(approve.get("skip_if_mac_active_seconds") or 0)
     if skip_active > 0:
         idle = config.mac_idle_seconds()
         if idle is not None and idle < skip_active:
-            config.log("approve: Mac active %.0fs ago, leaving the prompt to the terminal" % idle)
+            config.log("approve: Mac active %.0fs ago, leaving the prompt to Codex" % idle)
             return None
 
     if not config.allowed_user_ids(cfg):
@@ -213,35 +224,25 @@ def handle_permission_request(cfg: Dict[str, Any], data: Dict[str, Any]) -> Opti
 
     req = uuid.uuid4().hex[:12]
     wait = float(approve.get("wait_seconds") or 90)
-    suggestions = [s for s in (data.get("permission_suggestions") or []) if isinstance(s, dict)]
     base = "🔔 <b>需要你批准</b>\n%s\n\n%s" % (
         telegram.describe_session(data, st),
         telegram.tool_summary(data.get("tool_name", ""), data.get("tool_input")))
-    text = base + "\n\n<i>%d 秒内未响应将交回终端处理</i>" % int(wait)
+    text = base + "\n\n<i>%d 秒内未响应将交回 Codex 处理</i>" % int(wait)
 
     mid = telegram.send_message(cfg, text, "permission_prompt",
-                                reply_markup=build_keyboard(req, bool(suggestions)))
+                                reply_markup=build_keyboard(req))
     if mid is None:
         return None
 
-    # 让随后的 Notification(permission_prompt) 不再发一条无按钮的重复消息。
-    st["perm_handled_until"] = time.time() + wait + 20
-    state.mark_sent(st, "permission_prompt")
-    state.save_state(sid, st)
     config.log("approve: asked for %s (%s, req %s)" % (sid[:8], data.get("tool_name"), req))
 
     found = wait_for_decision(cfg, req, time.time() + wait, abort_on_mac_touch=skip_active > 0)
     choice = (found or {}).get("choice")
     who = html.escape(str((found or {}).get("from") or ""))
 
-    if choice in ("a", "s"):
-        always = choice == "s" and bool(suggestions)
-        telegram.edit_message(cfg, mid, base + "\n\n✅ <b>已允许%s</b>（%s，来自 Telegram）"
-                              % ("，不再询问" if always else "", who))
+    if choice == "a":
+        telegram.edit_message(cfg, mid, base + "\n\n✅ <b>已允许一次</b>（%s，来自 Telegram）" % who)
         decision: Dict[str, Any] = {"behavior": "allow"}
-        if always:
-            session_scoped = [s for s in suggestions if s.get("destination") == "session"]
-            decision["updatedPermissions"] = session_scoped or suggestions[:1]
         config.log("approve: allowed (%s) by %s" % (choice, who))
     elif choice == "d":
         telegram.edit_message(cfg, mid, base + "\n\n⛔ <b>已拒绝</b>（%s，来自 Telegram）" % who)
@@ -249,8 +250,8 @@ def handle_permission_request(cfg: Dict[str, Any], data: Dict[str, Any]) -> Opti
         config.log("approve: denied by %s" % who)
     else:
         reason = "检测到你在 Mac 前" if choice == "terminal" else "未响应"
-        telegram.edit_message(cfg, mid, base + "\n\n⌛ <i>%s，请在终端或 Claude App 里处理</i>" % reason)
-        config.log("approve: handed back to terminal for %s (%s)" % (sid[:8], reason))
+        telegram.edit_message(cfg, mid, base + "\n\n⌛ <i>%s，请在 Codex 里处理</i>" % reason)
+        config.log("approve: handed back to Codex for %s (%s)" % (sid[:8], reason))
         return None
 
     return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}

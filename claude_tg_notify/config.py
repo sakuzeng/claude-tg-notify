@@ -19,20 +19,22 @@ from . import APP  # noqa: F401  （供子命令打印用）
 # 路径
 # ---------------------------------------------------------------------------
 
-CONFIG_DIR = Path(os.environ.get("CLAUDE_TG_NOTIFY_CONFIG_DIR", "~/.config/claude-tg-notify")).expanduser()
+CONFIG_DIR = Path(os.environ.get("CODEX_TG_NOTIFY_CONFIG_DIR", "~/.config/codex-tg-notify")).expanduser()
 CONFIG_PATH = CONFIG_DIR / "config.json"
+LEGACY_CONFIG_PATH = Path("~/.config/claude-tg-notify/config.json").expanduser()
 
-STATE_DIR = Path(os.environ.get("CLAUDE_TG_NOTIFY_STATE_DIR", "~/.cache/claude-tg-notify")).expanduser()
+STATE_DIR = Path(os.environ.get("CODEX_TG_NOTIFY_STATE_DIR", "~/.cache/codex-tg-notify")).expanduser()
 SESSIONS_DIR = STATE_DIR / "sessions"
+ACTIVITY_DIR = STATE_DIR / "activity"
 INBOX_DIR = STATE_DIR / "inbox"
 LOG_PATH = STATE_DIR / "notify.log"
 POLL_LOCK = STATE_DIR / "poll.lock"
 OFFSET_PATH = STATE_DIR / "updates_offset"
 
-SETTINGS_PATH = Path(os.environ.get("CLAUDE_CONFIG_DIR", "~/.claude")).expanduser() / "settings.json"
+SETTINGS_PATH = Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser() / "hooks.json"
 
 #: 仓库根目录下的命令行入口（git clone 直跑时 hook 指向它）。
-SHIM_PATH = Path(__file__).resolve().parent.parent / "claude-tg-notify"
+SHIM_PATH = Path(__file__).resolve().parent.parent / "codex-tg-notify"
 
 
 # ---------------------------------------------------------------------------
@@ -71,11 +73,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "gap_lines": 1,
     "events": {
         "stop": True,
-        "permission_prompt": True,
-        "elicitation_dialog": True,
-        "agent_needs_input": True,
-        "idle_prompt": False,
-        "permission_denied": False,
     },
     "silent": {},
     "approve": {
@@ -89,11 +86,17 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 _MERGED_TABLES = ("events", "approve", "silent")
 
 
+def effective_config_path() -> Path:
+    if CONFIG_PATH.exists() or "CODEX_TG_NOTIFY_CONFIG_DIR" in os.environ:
+        return CONFIG_PATH
+    return LEGACY_CONFIG_PATH if LEGACY_CONFIG_PATH.exists() else CONFIG_PATH
+
+
 def load_config() -> Dict[str, Any]:
     """读配置，缺的键取默认值。文件损坏时退回全默认并记一行日志。"""
     cfg = json.loads(json.dumps(DEFAULT_CONFIG))
     try:
-        raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        raw = json.loads(effective_config_path().read_text(encoding="utf-8"))
     except FileNotFoundError:
         return cfg
     except Exception as exc:
@@ -101,7 +104,7 @@ def load_config() -> Dict[str, Any]:
         return cfg
     for key, value in raw.items():
         if key in _MERGED_TABLES and isinstance(value, dict):
-            cfg[key].update(value)
+            cfg[key].update({k: v for k, v in value.items() if k in cfg[key] or key == "silent"})
         else:
             cfg[key] = value
     return cfg

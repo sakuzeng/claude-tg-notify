@@ -1,4 +1,6 @@
-# 踩坑记录
+# Claude 版历史踩坑记录
+
+本页记录迁移前的 Claude Code 实现，事件与路径不代表当前 Codex 版。当前排障见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。
 
 > 按日期追加，格式：现象 → 原因 → 解法 → 已回写代码：是/否。
 > 跨项目通用的东西（Clash TUN、Telegram 代理）不在这里展开。
@@ -168,4 +170,3 @@
   `test_long_turn_survives_an_injection` 就是上面那张表。
 - 留一个没坐实的点：「注入也会触发 `UserPromptSubmit`」是从时间戳 0 秒吻合反推的，
   没有抓到原始载荷。新加的那行日志就是为了正面确认，跑几天回来看。
-

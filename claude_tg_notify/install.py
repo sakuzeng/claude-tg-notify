@@ -1,4 +1,4 @@
-"""把 hook 合并进 ~/.claude/settings.json。
+"""把 Codex hook 合并进 ~/.codex/hooks.json。
 
 只碰自己的条目：写入前先按标记剔除旧的再追加，所以重复安装与版本升级都是幂等的，
 别人装的 hook 原样保留。
@@ -7,15 +7,16 @@
 import json
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import config, handlers
+from . import config
 
 #: 用来认出"这条 hook 是我们装的"。必须覆盖所有历史入口名，否则升级会留下重复条目：
 #: claude_tg_notify.py（0.1–0.2 的单文件）、claude-tg-notify（垫片与 console script）、
 #: -m claude_tg_notify（pip 安装后的模块入口）。两个标记都足够独特，不会误伤别人的 hook。
-HOOK_MARKERS = ("claude_tg_notify", "claude-tg-notify")
+HOOK_MARKERS = ("codex_tg_notify", "codex-tg-notify", "claude_tg_notify", "claude-tg-notify")
 
 #: PermissionRequest 是同步 hook，要等用户点按钮，超时须比等待时长留出余量。
 TIMEOUT_MARGIN_SECONDS = 30
@@ -45,14 +46,10 @@ def our_hook_entries(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, List[Dic
     wait = int(((cfg or config.load_config()).get("approve") or {}).get("wait_seconds") or 90)
     return {
         "UserPromptSubmit": [{"hooks": [{"type": "command", "command": cmd, "timeout": 10}]}],
+        "PostToolUse": [{"hooks": [{"type": "command", "command": cmd, "timeout": 10}]}],
         "Stop": [{"hooks": [{"type": "command", "command": cmd, "timeout": 30, "async": True}]}],
-        "Notification": [{
-            "matcher": handlers.NOTIFICATION_MATCHER,
-            "hooks": [{"type": "command", "command": cmd, "timeout": 30, "async": True}],
-        }],
         "PermissionRequest": [{"hooks": [{"type": "command", "command": cmd,
                                           "timeout": wait + TIMEOUT_MARGIN_SECONDS}]}],
-        "PermissionDenied": [{"hooks": [{"type": "command", "command": cmd, "timeout": 30, "async": True}]}],
     }
 
 
@@ -70,7 +67,7 @@ def write_settings(path: Path, settings: Dict[str, Any]) -> Optional[Path]:
     """原子写，并在覆盖前留一份带时间戳的备份。"""
     backup = None
     if path.exists():
-        backup = path.with_name(path.name + ".bak-" + time.strftime("%Y%m%d-%H%M%S"))
+        backup = path.with_name(path.name + ".bak-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6])
         backup.write_bytes(path.read_bytes())
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
@@ -81,10 +78,16 @@ def write_settings(path: Path, settings: Dict[str, Any]) -> Optional[Path]:
 
 def install_hooks(path: Path) -> Optional[Path]:
     settings = read_settings(path)
+    before = json.dumps(settings, sort_keys=True)
     hooks = settings.setdefault("hooks", {})
+    for event in list(hooks):
+        hooks[event] = [e for e in (hooks[event] or []) if not is_ours(e)]
+        if not hooks[event]:
+            del hooks[event]
     for event, entries in our_hook_entries().items():
-        existing = [e for e in (hooks.get(event) or []) if not is_ours(e)]
-        hooks[event] = existing + entries
+        hooks[event] = (hooks.get(event) or []) + entries
+    if path.exists() and json.dumps(settings, sort_keys=True) == before:
+        return None
     return write_settings(path, settings)
 
 
@@ -130,11 +133,11 @@ def installed_permission_timeout(path: Path) -> Optional[int]:
 
 
 def stale_timeout_warning(cfg: Dict[str, Any], path: Path) -> Optional[str]:
-    """改了 wait_seconds 却没重装时，hook 会在决定回来之前就被 Claude Code 杀掉。"""
+    """改了 wait_seconds 却没重装时，hook 会在决定回来之前被 Codex 杀掉。"""
     wait = int((cfg.get("approve") or {}).get("wait_seconds") or 90)
     needed = wait + TIMEOUT_MARGIN_SECONDS
     installed = installed_permission_timeout(path)
     if installed is None or installed >= needed:
         return None
-    return ("⚠ approve.wait_seconds=%ss 需要 hook 超时 ≥ %ss，但 settings.json 里是 %ss。"
+    return ("⚠ approve.wait_seconds=%ss 需要 hook 超时 ≥ %ss，但 hooks.json 里是 %ss。"
             "重新运行 install，否则按钮点了也可能来不及生效。" % (wait, needed, installed))

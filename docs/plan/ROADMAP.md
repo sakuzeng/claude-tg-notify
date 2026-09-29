@@ -1,4 +1,6 @@
-# 边界与路线图
+# Claude 版历史路线图（迁移参考）
+
+当前 Codex 版待验收事项见 [BACKLOG.md](../status/BACKLOG.md)。
 
 ## 做什么、不做什么
 

@@ -1,4 +1,4 @@
-"""settings.json 合并、hook 命令构造、以及升级时对旧条目的识别。"""
+"""Codex hooks.json 合并、hook 命令构造、以及旧条目清理。"""
 
 import json
 import sys
@@ -8,14 +8,14 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from helpers import TMP, BaseCase, config, handlers, install  # noqa: E402
+from helpers import TMP, BaseCase, config, install  # noqa: E402
 
 OTHER_HOOK = {"hooks": [{"type": "command", "command": "echo other"}]}
 
 
 class SettingsCase(BaseCase):
     def settings_file(self, initial=None):
-        path = TMP / "claude" / "settings.json"
+        path = TMP / "codex" / "hooks.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(initial if initial is not None else {}), encoding="utf-8")
         return path
@@ -23,17 +23,17 @@ class SettingsCase(BaseCase):
 
 class InstallTests(SettingsCase):
     def test_merges_and_is_idempotent(self):
-        path = self.settings_file({"model": "opus", "hooks": {"Stop": [dict(OTHER_HOOK)]}})
+        path = self.settings_file({"description": "personal", "hooks": {"Stop": [dict(OTHER_HOOK)]}})
         install.install_hooks(path)
-        install.install_hooks(path)
+        self.assertIsNone(install.install_hooks(path))
         data = json.loads(path.read_text())
 
-        self.assertEqual(data["model"], "opus")
+        self.assertEqual(data["description"], "personal")
         stop = data["hooks"]["Stop"]
         self.assertEqual(len(stop), 2)
         self.assertEqual(stop[0]["hooks"][0]["command"], "echo other")
         self.assertTrue(stop[1]["hooks"][0]["async"])
-        self.assertEqual(data["hooks"]["Notification"][0]["matcher"], handlers.NOTIFICATION_MATCHER)
+        self.assertEqual(set(data["hooks"]), {"UserPromptSubmit", "PostToolUse", "Stop", "PermissionRequest"})
         self.assertEqual(len(data["hooks"]["UserPromptSubmit"]), 1)
         self.assertTrue(all(install.hooks_installed(path).values()))
 
@@ -45,13 +45,13 @@ class InstallTests(SettingsCase):
         self.assertGreaterEqual(entry["timeout"], int(config.load_config()["approve"]["wait_seconds"]) + 30)
 
     def test_backup_written(self):
-        path = self.settings_file({"model": "opus"})
+        path = self.settings_file({"description": "personal"})
         backup = install.install_hooks(path)
         self.assertIsNotNone(backup)
-        self.assertEqual(json.loads(backup.read_text())["model"], "opus")
+        self.assertEqual(json.loads(backup.read_text())["description"], "personal")
 
     def test_creates_file_when_absent(self):
-        path = TMP / "claude-fresh" / "settings.json"
+        path = TMP / "codex-fresh" / "hooks.json"
         self.assertIsNone(install.install_hooks(path))
         self.assertTrue(all(install.hooks_installed(path).values()))
 
@@ -64,12 +64,12 @@ class InstallTests(SettingsCase):
         self.assertFalse(any(install.hooks_installed(path).values()))
 
     def test_uninstall_drops_hooks_key_when_empty(self):
-        path = self.settings_file({"model": "opus"})
+        path = self.settings_file({"description": "personal"})
         install.install_hooks(path)
         install.uninstall_hooks(path)
         data = json.loads(path.read_text())
         self.assertNotIn("hooks", data)
-        self.assertEqual(data["model"], "opus")
+        self.assertEqual(data["description"], "personal")
 
     def test_uninstall_on_clean_file_is_noop(self):
         path = self.settings_file({"hooks": {"Stop": [dict(OTHER_HOOK)]}})
@@ -101,7 +101,7 @@ class MigrationTests(SettingsCase):
         install.install_hooks(path)
         data = json.loads(path.read_text())
         self.assertEqual(len(data["hooks"]["Stop"]), 1)
-        self.assertEqual(len(data["hooks"]["Notification"]), 1)
+        self.assertNotIn("Notification", data["hooks"])
         self.assertNotIn("/old/path", json.dumps(data))
 
     def test_uninstall_removes_legacy_entries(self):
@@ -113,12 +113,12 @@ class MigrationTests(SettingsCase):
 class HookCommandTests(BaseCase):
     def test_prefers_repo_shim(self):
         cmd = install.hook_command()
-        self.assertTrue(config.SHIM_PATH.exists(), "仓库根目录应有 claude-tg-notify 垫片")
+        self.assertTrue(config.SHIM_PATH.exists(), "仓库根目录应有 codex-tg-notify 垫片")
         self.assertIn(str(config.SHIM_PATH), cmd)
         self.assertTrue(cmd.endswith(" hook"))
 
     def test_falls_back_to_module_entry_when_shim_missing(self):
-        missing = Path("/nonexistent/claude-tg-notify")
+        missing = Path("/nonexistent/codex-tg-notify")
         with mock.patch.object(config, "SHIM_PATH", missing):
             cmd = install.hook_command()
         self.assertIn("-m claude_tg_notify hook", cmd)

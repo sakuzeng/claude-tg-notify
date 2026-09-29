@@ -1,41 +1,32 @@
-# 配置项
+# 配置
 
-> 常青规范。文件：`~/.config/claude-tg-notify/config.json`，权限 600。
-> 默认值的唯一事实源是代码里的 `DEFAULT_CONFIG`；缺的键取默认，`events` / `approve` / `silent` 三个子表按键合并。
-> 完整样例：[`../../config.example.json`](../../config.example.json)。
+`~/.config/codex-tg-notify/config.json` 保存 bot token 和选项，权限 600。新文件不存在时，程序只读沿用旧的 `~/.config/claude-tg-notify/config.json`；`setup` 会写入新路径。默认值以 `config.DEFAULT_CONFIG` 为准，完整样例见 [config.example.json](../../config.example.json)。
 
-| 键 | 默认 | 说明 |
+| 键 | 默认 | 用途 |
 |---|---|---|
-| `bot_token` | `""` | @BotFather 给的 token，`setup` 写入 |
-| `chat_id` | `""` | 收消息的聊天；`setup` 从你发给 bot 的第一条消息自动取 |
-| `proxy` | `""` | HTTP 代理，如 `http://127.0.0.1:7890`；留空直连。Clash TUN 模式不需要 |
-| `min_turn_seconds` | `60` | 一轮少于这个秒数不推"任务完成"。调小会让日常问答开始刷屏。计时从你这一轮的第一条提示算起，中途注入的后台任务通知、排队补发的消息都不会重置它（PITFALL 15）|
-| `away_after_seconds` | `120` | Mac 闲置超过这么久就当你不在电脑前，此时 `min_turn_seconds` 不再适用，再短的一轮也推。0 = 关闭；非 macOS 探测不到空闲时间，一律沿用阈值。只测键鼠输入，不知道你在不在看屏幕 —— 盯着屏幕两分钟不动也算「不在」 |
-| `min_interval_seconds` | `30` | 同一会话、同一类通知的最短间隔 |
-| `message_style` | `minimal` | 「任务完成」带不带正文：`minimal` 不带（只剩五行）/ `collapsed` 正文折叠进可展开引用 / `full` 直接摊开。**只管这一类消息**，「需要你批准 / 回答」的正文是问题本身，永远带 |
-| `show_activity` | `true` | 「任务完成」里加一行本轮用过的工具与改过的文件，从 transcript 数出来，不经过模型 |
-| `separator` | `━━━━━━━━━━━━━━` | 每条消息顶部的分隔线，空串 = 不加。浅色主题下相邻消息挨太紧时靠它断开 |
-| `gap_lines` | `1` | 每条消息尾部补几行空白（盲文空白字符，Telegram 不会裁掉），最多 5，0 = 不补 |
-| `max_text_chars` | `700` | 正文截断长度（Telegram 上限 4096）。`message_style=minimal` 时对「任务完成」无效 |
-| `skip_if_mac_active_seconds` | `0` | 大于 0：Mac 在这么多秒内有键鼠输入就不推**普通通知**。0 = 总是推。与 `away_after_seconds` 方向相反且**后判优先**，两者的关系见 [`../ops/TROUBLESHOOTING.md`](../ops/TROUBLESHOOTING.md) |
-| `allowed_user_ids` | `[]` | 允许点按钮的 Telegram 用户 id。空 = 私聊对象本人；**群聊必须填**，否则远程批准整体关闭 |
-| `events.stop` | `true` | 任务完成 |
-| `events.permission_prompt` | `true` | 需要你批准（无按钮版；按钮版由 `approve` 控制，两者不会同时发） |
-| `events.elicitation_dialog` | `true` | 需要你回答 |
-| `events.agent_needs_input` | `true` | 子代理要输入 |
-| `events.idle_prompt` | `false` | 空闲 60 秒提醒；和 Stop 重复，默认关 |
-| `events.permission_denied` | `false` | auto 模式拒绝操作时推送 |
-| `silent.<事件名>` | 无 | 设 `true` 则该类消息静音送达（Telegram 不响铃）。事件名同 `events` 的键 |
-| `approve.enabled` | `true` | 是否发带按钮的批准消息 |
-| `approve.wait_seconds` | `90` | 等按钮的时长。**改了要重新跑 `install`**，hook 超时 = 这个值 + 30 |
-| `approve.skip_if_mac_active_seconds` | `60` | 触发时 Mac 在这么多秒内活跃就不发按钮、直接终端提示；也决定等待途中是否因碰键鼠而交回。0 = 总是发且不交回 |
+| `bot_token`、`chat_id` | 空 | Telegram bot 与收消息的聊天；`setup` 配置 |
+| `proxy` | 空 | Telegram API 的 HTTP 代理 |
+| `min_turn_seconds` | `60` | 短于该时长的任务默认不发完成通知 |
+| `away_after_seconds` | `120` | Mac 闲置达到该时长时，短轮也推；0 关闭 |
+| `skip_if_mac_active_seconds` | `0` | Mac 近期有键鼠输入时跳过普通通知；0 不跳过 |
+| `min_interval_seconds` | `30` | 同类通知的节流间隔 |
+| `message_style` | `minimal` | 完成通知的正文：`minimal` 无、`collapsed` 折叠、`full` 展开 |
+| `show_activity` | `true` | 完成通知附一行 `PostToolUse` 工具与文件名摘要 |
+| `max_text_chars` | `700` | 正文最大长度 |
+| `separator`、`gap_lines` | 分隔线、`1` | Telegram 消息外观；空分隔线或 0 行可关闭 |
+| `events.stop` | `true` | 是否发送任务完成通知 |
+| `silent.stop`、`silent.permission_prompt` | 未设置 | 对应 Telegram 消息静音送达 |
+| `allowed_user_ids` | `[]` | 可点批准按钮的用户 id；私聊默认是 chat id，群聊必须显式设置 |
+| `approve.enabled` | `true` | 启用远程批准 |
+| `approve.wait_seconds` | `90` | 按钮等待时长；改后重新运行 `install` 以同步 hook 超时 |
+| `approve.skip_if_mac_active_seconds` | `60` | Mac 活跃时不发按钮，等待时触碰 Mac 则交回 Codex；0 表示每次都发 |
 
-环境变量（测试与多实例用）：
+测试和多实例可用环境变量覆盖路径：
 
-| 变量 | 覆盖 |
+| 变量 | 默认 |
 |---|---|
-| `CLAUDE_TG_NOTIFY_CONFIG_DIR` | 配置目录，默认 `~/.config/claude-tg-notify` |
-| `CLAUDE_TG_NOTIFY_STATE_DIR` | 状态目录，默认 `~/.cache/claude-tg-notify` |
-| `CLAUDE_CONFIG_DIR` | Claude Code 配置目录，默认 `~/.claude`；`install` 写的是它下面的 `settings.json` |
+| `CODEX_TG_NOTIFY_CONFIG_DIR` | `~/.config/codex-tg-notify` |
+| `CODEX_TG_NOTIFY_STATE_DIR` | `~/.cache/codex-tg-notify` |
+| `CODEX_HOME` | `~/.codex`，`install` 修改其中的 `hooks.json` |
 
-查看生效配置：`./claude-tg-notify status`（token 打码显示）。
+运行 `./codex-tg-notify status` 查看生效配置路径、安装状态、最近日志。状态命令会遮住 bot token。

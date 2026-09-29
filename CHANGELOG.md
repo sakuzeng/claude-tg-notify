@@ -1,5 +1,10 @@
 # 变更记录
 
+## 1.0.1 — 2026-09-29
+
+- 将 `Stop` hook 改为同步运行，避免 Codex 会话结束时取消尚未完成的后台通知。
+- 在真实 Codex CLI 工具任务中验证 `UserPromptSubmit`、`PostToolUse` 和 `Stop`，并通过 Telegram 发送完成通知。
+
 ## 1.0.0 — 2026-09-29
 
 - 改为 Codex Telegram 通知：从 `~/.codex/hooks.json` 接入 `UserPromptSubmit`、`PostToolUse`、`Stop`、`PermissionRequest`，保留其他 hook 并清理本项目旧条目。

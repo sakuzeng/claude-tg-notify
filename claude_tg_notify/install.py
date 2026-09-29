@@ -47,7 +47,7 @@ def our_hook_entries(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, List[Dic
     return {
         "UserPromptSubmit": [{"hooks": [{"type": "command", "command": cmd, "timeout": 10}]}],
         "PostToolUse": [{"hooks": [{"type": "command", "command": cmd, "timeout": 10}]}],
-        "Stop": [{"hooks": [{"type": "command", "command": cmd, "timeout": 30, "async": True}]}],
+        "Stop": [{"hooks": [{"type": "command", "command": cmd, "timeout": 30}]}],
         "PermissionRequest": [{"hooks": [{"type": "command", "command": cmd,
                                           "timeout": wait + TIMEOUT_MARGIN_SECONDS}]}],
     }

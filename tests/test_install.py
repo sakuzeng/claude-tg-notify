@@ -32,7 +32,7 @@ class InstallTests(SettingsCase):
         stop = data["hooks"]["Stop"]
         self.assertEqual(len(stop), 2)
         self.assertEqual(stop[0]["hooks"][0]["command"], "echo other")
-        self.assertTrue(stop[1]["hooks"][0]["async"])
+        self.assertNotIn("async", stop[1]["hooks"][0])
         self.assertEqual(set(data["hooks"]), {"UserPromptSubmit", "PostToolUse", "Stop", "PermissionRequest"})
         self.assertEqual(len(data["hooks"]["UserPromptSubmit"]), 1)
         self.assertTrue(all(install.hooks_installed(path).values()))
